@@ -60,7 +60,8 @@ try {
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
-        -SkipVersionCheck | Out-Null
+        -SkipVersionCheck `
+        -NoLaunch | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "installer returned a failure"
 
     # Reinstall must not duplicate hooks or overwrite the original backup.
@@ -68,12 +69,15 @@ try {
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
-        -SkipVersionCheck | Out-Null
+        -SkipVersionCheck `
+        -NoLaunch | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
     Assert-True (@($settings.hooks.SessionStart).Count -eq 1) "SessionStart hook was duplicated"
     Assert-True (@($settings.hooks.SessionEnd).Count -eq 1) "SessionEnd hook was duplicated"
     Assert-True ($settings.statusLine.command -match "token-mass-windows\.ps1") "statusLine bridge missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "profile.json")) "Terminal fragment missing"
+    $terminalProfile = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "profile.json")) | ConvertFrom-Json
+    Assert-True ($terminalProfile.profiles[0].commandline -match "claude") "Terminal profile does not auto-start Claude"
     Assert-True (-not (Test-Path -LiteralPath $LegacyState)) "legacy install state was not migrated"
     $legacyConfigAfter = [System.IO.File]::ReadAllText($LegacyGhosttyConfig)
     Assert-True ($legacyConfigAfter -match "font-size = 13") "unrelated Ghostty config was lost"

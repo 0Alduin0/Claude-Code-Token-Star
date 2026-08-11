@@ -49,6 +49,11 @@ If you already have the source folder, open PowerShell there and run only:
 .\install
 ```
 
+Installation immediately opens a new `Claude Supernova` Windows Terminal
+window in the directory where `install` was run and starts `claude`
+automatically. When running from a PyCharm terminal, no profile selection or
+second `cd` command is required.
+
 The longer equivalent command is:
 
 ```powershell
@@ -65,12 +70,11 @@ The installer:
 5. Backs up a replaced status line for uninstall.
 6. Is idempotent: running it again does not duplicate hooks or profiles.
 
-Close **all** Windows Terminal windows after installation. Reopen Windows
-Terminal, click the arrow beside the new-tab button, and select
-`Claude Supernova`. Run Claude Code inside that profile:
+The `Claude Supernova` profile always starts Claude Code automatically. To open
+it later in any other project, run this from that project's terminal:
 
 ```powershell
-claude
+wt.exe -w new -p "Claude Supernova" -d .
 ```
 
 Claude may ask you to trust the status-line or hook command on first use.

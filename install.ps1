@@ -3,7 +3,9 @@ param(
     [string]$ClaudeSettings = (Join-Path $HOME ".claude\settings.json"),
     [string]$TerminalSettings,
     [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\Fragments\GhosttySupernova"),
-    [switch]$SkipVersionCheck
+    [string]$ProjectPath = (Get-Location).Path,
+    [switch]$SkipVersionCheck,
+    [switch]$NoLaunch
 )
 
 $ErrorActionPreference = "Stop"
@@ -130,7 +132,7 @@ $profile = [ordered]@{
         [ordered]@{
             guid = "{8f3e7344-11ef-5c09-a645-9b8c2c3f6b63}"
             name = "Claude Supernova"
-            commandline = "powershell.exe"
+            commandline = 'powershell.exe -NoLogo -NoExit -Command "claude"'
             startingDirectory = "%USERPROFILE%"
             "experimental.pixelShaderPath" = $generatedShader
         }
@@ -239,4 +241,15 @@ Write-Output "Installed Ghostty Supernova for Windows Terminal."
 Write-Output "Profile: Claude Supernova"
 Write-Output "Claude:  $ClaudeSettings"
 Write-Output "Runtime: $RuntimeRoot"
-Write-Output "Close all Windows Terminal windows, reopen it, and select 'Claude Supernova'."
+if (-not $NoLaunch) {
+    $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
+    if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
+        throw "Project directory was not found: $ProjectPath"
+    }
+    Write-Output "Opening Claude Supernova in: $ProjectPath"
+    & wt.exe -w new -p "Claude Supernova" -d $ProjectPath
+    if ($LASTEXITCODE -ne 0) { throw "Windows Terminal could not launch Claude Supernova." }
+}
+else {
+    Write-Output "Automatic launch skipped."
+}
