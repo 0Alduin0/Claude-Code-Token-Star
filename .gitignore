@@ -6,6 +6,7 @@ ghostty-supernova.install.json
 ghostty-supernova.windows.install.json
 supernova-windows.generated.hlsl
 token-state.json
+overlay-position.json
 *.ghostty-supernova.tmp
 *.mp4
 *.mov

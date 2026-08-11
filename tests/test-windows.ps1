@@ -126,6 +126,8 @@ try {
     Assert-True ($shader -match "#define TOKEN_ACTIVE 0") "SessionEnd did not disable the shader"
     $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
     Assert-True (-not [bool]$overlayState.active) "SessionEnd did not disable the overlay"
+    $overlayPositionPath = Join-Path $RuntimeRoot "overlay-position.json"
+    [System.IO.File]::WriteAllText($overlayPositionPath, '{"x":0.5,"y":0.5}', $Utf8NoBom)
 
     & (Join-Path $Root "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
@@ -135,6 +137,7 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "profile.json"))) "fragment was not removed"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1"))) "overlay was not removed"
     Assert-True (-not (Test-Path -LiteralPath $overlayStatePath)) "overlay state was not removed"
+    Assert-True (-not (Test-Path -LiteralPath $overlayPositionPath)) "saved overlay position was not removed"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $ClaudeSettings) "ghostty-supernova.windows.install.json"))) "install state was not removed"
 
     Write-Output "Windows bridge/install/uninstall integration tests passed."

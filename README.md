@@ -22,7 +22,7 @@ Stage changes are intentional hard cuts:
 | 35-55% | Blue Giant | Blue-white, larger, more luminous |
 | 55-75% | Hypergiant | White-gold glare inside two clean halos |
 | 75-90% | Neutron Star | Compact cyan core with fast polar lasers |
-| 90-100% | Quasar | Black core, 600-RPS disk flow, relativistic polar jets |
+| 90-100% | Quasar | Black core, 600-RPS 3D disk flow, relativistic polar jets |
 
 For example, 74% is entirely Hypergiant and 75% is immediately Neutron Star.
 A quasar is not a normal stellar phase; the project presents a deliberate
@@ -60,6 +60,16 @@ Installation starts the overlay invisibly in the background, then starts
 means Claude stays in PyCharm's terminal and the star appears over the PyCharm
 window. The overlay is click-through, does not steal focus, and hides when a
 supported IDE is not the foreground window.
+
+Move it by dragging the `MASS ... MOVE` label. The rest of the visual remains
+click-through, the complete effect is clamped inside the IDE window, and its
+position is remembered for the next launch.
+
+The overlay uses adaptive rendering: animation work stops while the IDE is not
+foreground, token-file polling and foreground inspection are throttled, and
+brushes are reused rather than allocated every frame. The Quasar disk is split
+into back and front layers so its near side visibly crosses in front of the
+black core.
 
 Supported foreground processes are PyCharm, IntelliJ IDEA, WebStorm, Rider,
 VS Code, Cursor, Visual Studio, and Eclipse. The overlay restarts itself when a

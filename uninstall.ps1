@@ -122,7 +122,9 @@ if ($runtimeRoot) {
         "token-mass-windows.ps1",
         "token-star-overlay.ps1",
         "token-state.json",
-        "token-state.json.tmp"
+        "token-state.json.tmp",
+        "overlay-position.json",
+        "overlay-position.json.tmp"
     )) {
         $path = Join-Path $runtimeRoot $name
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
