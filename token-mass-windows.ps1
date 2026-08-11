@@ -36,6 +36,8 @@ param(
 $ErrorActionPreference = "Stop"
 $TemplatePath = Join-Path $PSScriptRoot "supernova-windows.hlsl"
 $GeneratedPath = Join-Path $PSScriptRoot "supernova-windows.generated.hlsl"
+$StatePath = Join-Path $PSScriptRoot "token-state.json"
+$OverlayPath = Join-Path $PSScriptRoot "token-star-overlay.ps1"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $Invariant = [System.Globalization.CultureInfo]::InvariantCulture
 
@@ -132,6 +134,38 @@ function Format-TokenCount {
     return $Value.ToString($Invariant)
 }
 
+function Write-OverlayState {
+    param([double]$ContextLevel, [long]$UsedTokens, [bool]$Active)
+    $state = [ordered]@{
+        level = $ContextLevel
+        tokens = $UsedTokens
+        active = $Active
+        stage = Get-StageName $ContextLevel
+    }
+    $content = ($state | ConvertTo-Json -Compress) + "`n"
+    if ((Test-Path -LiteralPath $StatePath) -and
+        [System.IO.File]::ReadAllText($StatePath) -eq $content) {
+        return
+    }
+    $temporary = $StatePath + ".tmp"
+    [System.IO.File]::WriteAllText($temporary, $content, $Utf8NoBom)
+    Move-Item -LiteralPath $temporary -Destination $StatePath -Force
+}
+
+function Start-OverlayIfNeeded {
+    if (-not (Test-Path -LiteralPath $OverlayPath)) { return }
+    $createdNew = $false
+    $mutex = New-Object System.Threading.Mutex($true, "Local\ClaudeCodeTokenStarOverlay", [ref]$createdNew)
+    try {
+        if (-not $createdNew) { return }
+        $mutex.ReleaseMutex()
+        Start-Process powershell.exe `
+            -ArgumentList @("-NoLogo", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$OverlayPath`"") `
+            -WindowStyle Hidden | Out-Null
+    }
+    finally { $mutex.Dispose() }
+}
+
 function Write-ShaderState {
     param([double]$ContextLevel, [long]$UsedTokens, [bool]$Active)
     if (-not (Test-Path -LiteralPath $TemplatePath)) {
@@ -139,6 +173,8 @@ function Write-ShaderState {
     }
 
     $safeLevel = [Math]::Min(1.0, [Math]::Max(0.0, $ContextLevel))
+    Write-OverlayState $safeLevel $UsedTokens $Active
+    if ($Active) { Start-OverlayIfNeeded }
     $massK = [Math]::Min(4095, [Math]::Max(0, [Math]::Round($UsedTokens / 1000.0)))
     $activeNumber = if ($Active) { 1 } else { 0 }
     $header = "#define TOKEN_LEVEL $($safeLevel.ToString('0.######', $Invariant))`n" +
@@ -168,12 +204,14 @@ if ($Doctor) {
     else { Write-Output "[FAIL] HLSL template: $TemplatePath"; $failed = $true }
     if (Test-Path -LiteralPath $GeneratedPath) { Write-Output "[OK] Generated shader: $GeneratedPath" }
     else { Write-Output "[FAIL] Generated shader: $GeneratedPath"; $failed = $true }
+    if (Test-Path -LiteralPath $OverlayPath) { Write-Output "[OK] IDE overlay: $OverlayPath" }
+    else { Write-Output "[FAIL] IDE overlay: $OverlayPath"; $failed = $true }
     $terminalSettings = Get-WindowsTerminalSettingsPath
-    if ($terminalSettings) { Write-Output "[OK] Windows Terminal settings: $terminalSettings" }
-    else { Write-Output "[FAIL] Windows Terminal settings not found"; $failed = $true }
+    if ($terminalSettings) { Write-Output "[OK] Optional Windows Terminal settings: $terminalSettings" }
+    else { Write-Output "[SKIP] Optional Windows Terminal settings not found" }
     $terminal = Get-Command wt.exe -ErrorAction SilentlyContinue
-    if ($terminal) { Write-Output "[OK] Windows Terminal: $($terminal.Source)" }
-    else { Write-Output "[FAIL] wt.exe not found"; $failed = $true }
+    if ($terminal) { Write-Output "[OK] Optional Windows Terminal: $($terminal.Source)" }
+    else { Write-Output "[SKIP] Optional Windows Terminal not found" }
     if ($failed) { exit 1 }
     exit 0
 }

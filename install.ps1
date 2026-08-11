@@ -23,7 +23,7 @@ function Find-TerminalSettings {
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }
-    throw "Windows Terminal settings.json was not found. Install Windows Terminal 1.24 or newer first."
+    return $null
 }
 
 function Read-JsonObject {
@@ -115,14 +115,13 @@ $RuntimeRoot = [System.IO.Path]::GetFullPath($RuntimeRoot)
 if (-not $SkipVersionCheck) {
     $terminalPackage = Get-AppxPackage Microsoft.WindowsTerminal -ErrorAction SilentlyContinue |
         Sort-Object Version -Descending | Select-Object -First 1
-    if ($null -eq $terminalPackage) { throw "Windows Terminal is not installed." }
-    if ([version]$terminalPackage.Version -lt [version]"1.24.0.0") {
-        throw "Windows Terminal 1.24+ is required; found $($terminalPackage.Version)."
+    if ($terminalPackage -and [version]$terminalPackage.Version -lt [version]"1.24.0.0") {
+        Write-Warning "Windows Terminal $($terminalPackage.Version) is too old for the optional HLSL profile. The IDE overlay will still work."
     }
 }
 
 [System.IO.Directory]::CreateDirectory($RuntimeRoot) | Out-Null
-foreach ($name in @("token-mass-windows.ps1", "supernova-windows.hlsl")) {
+foreach ($name in @("token-mass-windows.ps1", "token-star-overlay.ps1", "supernova-windows.hlsl")) {
     Copy-Item -LiteralPath (Join-Path $ScriptRoot $name) -Destination (Join-Path $RuntimeRoot $name) -Force
 }
 
@@ -150,6 +149,7 @@ $state = Read-JsonObject $statePath "Install state"
 $legacyStatePath = Join-Path (Split-Path -Parent $ClaudeSettings) "ghostty-supernova.install.json"
 $legacyState = Read-JsonObject $legacyStatePath "Legacy install state"
 $bridge = Join-Path $RuntimeRoot "token-mass-windows.ps1"
+$overlay = Join-Path $RuntimeRoot "token-star-overlay.ps1"
 $command = "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$bridge`""
 $commandsToReplace = @($command)
 if ($state.PSObject.Properties["command"] -and $state.command) {
@@ -186,6 +186,7 @@ Set-ObjectProperty $state "command" $command
 Set-ObjectProperty $state "claude_settings" $ClaudeSettings
 Set-ObjectProperty $state "terminal_settings" $TerminalSettings
 Set-ObjectProperty $state "runtime_root" $RuntimeRoot
+Set-ObjectProperty $state "overlay" $overlay
 
 Remove-HookCommands $settings $commandsToReplace
 Set-ObjectProperty $settings "statusLine" ([pscustomobject]@{ type = "command"; command = $command })
@@ -229,7 +230,7 @@ if ($legacyCommand -and (Test-Path -LiteralPath $legacyStatePath)) {
 $oldOverride = $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS
 try {
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
-    & $bridge -Level 0 -Tokens 0 | Out-Null
+    & $bridge -Off | Out-Null
     & $bridge -Doctor
     if ($LASTEXITCODE -ne 0) { throw "Windows bridge doctor failed." }
 }
@@ -237,19 +238,41 @@ finally {
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $oldOverride
 }
 
-Write-Output "Installed Ghostty Supernova for Windows Terminal."
-Write-Output "Profile: Claude Supernova"
+Write-Output "Installed Claude Code Token Star for Windows."
+Write-Output "IDE overlay: $overlay"
+Write-Output "Optional Windows Terminal profile: Claude Supernova"
 Write-Output "Claude:  $ClaudeSettings"
 Write-Output "Runtime: $RuntimeRoot"
+if (-not $TerminalSettings) {
+    Write-Output "Windows Terminal not found; skipped reload integration. The IDE overlay is fully available."
+}
 if (-not $NoLaunch) {
     $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
     if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
         throw "Project directory was not found: $ProjectPath"
     }
-    Write-Output "Opening Claude Supernova in: $ProjectPath"
-    & wt.exe -w new -p "Claude Supernova" -d $ProjectPath
-    if ($LASTEXITCODE -ne 0) { throw "Windows Terminal could not launch Claude Supernova." }
+    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+        throw "Claude Code command ('claude') was not found in PATH."
+    }
+
+    $overlayRunning = $false
+    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue)) {
+        if ($process.CommandLine -and $process.CommandLine.IndexOf($overlay, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            $overlayRunning = $true
+            break
+        }
+    }
+    if (-not $overlayRunning) {
+        Start-Process powershell.exe `
+            -ArgumentList @("-NoLogo", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$overlay`"") `
+            -WindowStyle Hidden | Out-Null
+    }
+
+    Write-Output "Overlay is running. Starting Claude in this terminal: $ProjectPath"
+    Push-Location -LiteralPath $ProjectPath
+    try { & claude }
+    finally { Pop-Location }
 }
 else {
-    Write-Output "Automatic launch skipped."
+    Write-Output "Automatic overlay/Claude launch skipped."
 }

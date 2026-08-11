@@ -90,13 +90,14 @@ $runtimeRoot = if ($state.PSObject.Properties["runtime_root"]) {
     [System.IO.Path]::GetFullPath([string]$state.runtime_root)
 }
 else { $null }
-$terminalSettings = if ($state.PSObject.Properties["terminal_settings"]) {
+$terminalSettings = if ($state.PSObject.Properties["terminal_settings"] -and $state.terminal_settings) {
     [System.IO.Path]::GetFullPath([string]$state.terminal_settings)
 }
 else { $null }
 
 if ($runtimeRoot) {
     $bridge = Join-Path $runtimeRoot "token-mass-windows.ps1"
+    $overlay = Join-Path $runtimeRoot "token-star-overlay.ps1"
     if (Test-Path -LiteralPath $bridge) {
         $oldOverride = $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS
         try {
@@ -106,12 +107,22 @@ if ($runtimeRoot) {
         finally { $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $oldOverride }
     }
 
+    foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        if ($process.Name -in @("powershell.exe", "pwsh.exe") -and $process.CommandLine -and
+            $process.CommandLine.IndexOf($overlay, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     foreach ($name in @(
         "profile.json",
         "supernova-windows.hlsl",
         "supernova-windows.generated.hlsl",
         "supernova-windows.generated.hlsl.tmp",
-        "token-mass-windows.ps1"
+        "token-mass-windows.ps1",
+        "token-star-overlay.ps1",
+        "token-state.json",
+        "token-state.json.tmp"
     )) {
         $path = Join-Path $runtimeRoot $name
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
@@ -127,5 +138,5 @@ if ($terminalSettings -and (Test-Path -LiteralPath $terminalSettings)) {
     [System.IO.File]::SetLastWriteTimeUtc($terminalSettings, [DateTime]::UtcNow)
 }
 
-Write-Output "Removed Ghostty Supernova from Claude Code and Windows Terminal."
+Write-Output "Removed Claude Code Token Star, its IDE overlay, and Windows Terminal profile."
 Write-Output "Close and reopen Windows Terminal to remove the profile from its menu."

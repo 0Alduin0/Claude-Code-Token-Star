@@ -1,13 +1,15 @@
 # Ghostty Supernova
 
 Ghostty Supernova turns Claude Code's live context-window usage into a cosmic
-mass escalation inside the terminal. Windows Terminal is the primary runtime;
-Ghostty on Linux and macOS remains supported as the secondary runtime.
+mass escalation. On Windows it appears as a transparent, click-through overlay
+inside PyCharm and other supported IDE windows. Claude keeps running in the
+IDE's own terminal; no separate terminal window is opened. Ghostty on Linux
+and macOS remains supported.
 
 Only context tokens are used. Test results, diff size, cost, task score, and
 productivity signals never enter either shader.
 
-![Quasar running natively in Windows Terminal](assets/windows-terminal-quasar.png)
+![All six token stages running as a click-through PyCharm overlay](assets/windows-ide-overlay-stages.png)
 
 ## Stages
 
@@ -30,7 +32,6 @@ A quasar is not a normal stellar phase; the project presents a deliberate
 
 Requirements:
 
-- Windows Terminal 1.24 or newer
 - Claude Code
 - Windows PowerShell 5.1 or PowerShell 7
 - No Python dependency on Windows
@@ -49,10 +50,16 @@ If you already have the source folder, open PowerShell there and run only:
 .\install
 ```
 
-Installation immediately opens a new `Claude Supernova` Windows Terminal
-window in the directory where `install` was run and starts `claude`
-automatically. When running from a PyCharm terminal, no profile selection or
-second `cd` command is required.
+Installation starts the overlay invisibly in the background, then starts
+`claude` directly in the terminal where `install` was entered. In PyCharm this
+means Claude stays in PyCharm's terminal and the star appears over the PyCharm
+window. The overlay is click-through, does not steal focus, and hides when a
+supported IDE is not the foreground window.
+
+Supported foreground processes are PyCharm, IntelliJ IDEA, WebStorm, Rider,
+VS Code, Cursor, Visual Studio, and Eclipse. The overlay restarts itself when a
+Claude status-line update arrives, so it also comes back automatically after a
+reboot when Claude is next used.
 
 The longer equivalent command is:
 
@@ -62,16 +69,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 The installer:
 
-1. Creates a separate Windows Terminal profile named `Claude Supernova`.
-2. Installs the HLSL shader and native PowerShell bridge under
+1. Installs the WPF IDE overlay, HLSL shader, and native PowerShell bridge under
    `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\GhosttySupernova`.
-3. Connects Claude Code's `statusLine`, `SessionStart`, and `SessionEnd` events.
-4. Preserves unrelated Claude settings and hooks.
-5. Backs up a replaced status line for uninstall.
+2. Connects Claude Code's `statusLine`, `SessionStart`, and `SessionEnd` events.
+3. Preserves unrelated Claude settings and hooks.
+4. Backs up a replaced status line for uninstall.
+5. Starts Claude in the current IDE terminal.
 6. Is idempotent: running it again does not duplicate hooks or profiles.
 
-The `Claude Supernova` profile always starts Claude Code automatically. To open
-it later in any other project, run this from that project's terminal:
+If Windows Terminal 1.24+ is installed, the installer also creates an optional
+`Claude Supernova` HLSL profile. It is not opened automatically. To use that
+terminal-native shader instead of the IDE overlay, run:
 
 ```powershell
 wt.exe -w new -p "Claude Supernova" -d .
@@ -81,10 +89,10 @@ Claude may ask you to trust the status-line or hook command on first use.
 After the first assistant response, the status line and shader use the real
 context-window values.
 
-## Windows: test before opening Claude
+## Windows: manual stage test
 
-Inside the `Claude Supernova` profile, enter the project directory and send
-manual values:
+From the cloned repository, send manual values while a supported IDE is the
+foreground window:
 
 ```powershell
 cd "C:\path\to\ghostty-supernova"
@@ -110,23 +118,20 @@ Installation diagnostics:
 .\token-test.ps1 doctor
 ```
 
-## How Windows token updates reach HLSL
+## How Windows token updates reach the visuals
 
-Windows Terminal exposes `Time`, `Scale`, `Resolution`, `Background`, and the
-terminal texture to HLSL pixel shaders, but no arbitrary token uniform. The
-bridge therefore uses a controlled reload channel:
+The PowerShell bridge writes one small atomic state file for the IDE overlay.
+If the optional Windows Terminal profile is installed, it also updates the HLSL
+defines through a controlled reload channel:
 
 ```text
 Claude Code status-line JSON
         | used_percentage + total_input_tokens + context_window_size
         v
 token-mass-windows.ps1
-        | atomic TOKEN_LEVEL / TOKEN_MASS_K update
-        v
-supernova-windows.generated.hlsl
-        | settings timestamp requests a safe shader reload
-        v
-Windows Terminal profile "Claude Supernova"
+        +--> token-state.json --> transparent IDE overlay
+        |
+        +--> TOKEN_LEVEL / TOKEN_MASS_K --> optional Windows Terminal HLSL
 ```
 
 The main Windows Terminal settings content is not rewritten during token
@@ -149,9 +154,10 @@ From the project folder:
 .\uninstall
 ```
 
-Uninstall removes the `Claude Supernova` profile and installed runtime files,
-removes only this project's Claude hooks, and restores a previous status line.
-Close and reopen Windows Terminal afterward.
+Uninstall stops and removes the IDE overlay, removes the optional
+`Claude Supernova` profile and runtime files, removes only this project's
+Claude hooks, and restores a previous status line. Close and reopen Windows
+Terminal afterward only if you used its optional profile.
 
 ## Linux and macOS: Ghostty install
 
@@ -260,17 +266,18 @@ fallback. GitHub Actions runs Linux, Windows, GLSL, and HLSL jobs.
 
 ## Troubleshooting
 
-- No `Claude Supernova` profile: close every Windows Terminal process and
-  reopen it; fragments are discovered when settings reload.
-- Profile opens but no object: run `.\token-test.ps1 doctor`, then
-  `.\token-test.ps1 95` inside that profile.
+- No overlay in PyCharm: keep PyCharm focused and run `.\token-test.ps1 95`.
+  The object is deliberately hidden while another application is foreground.
+- Overlay does not respond: run `.\token-test.ps1 doctor`, then reinstall with
+  `.\install`.
+- No optional `Claude Supernova` profile: close every Windows Terminal process
+  and reopen it; fragments are discovered when settings reload.
 - Shader compilation warning: run `npm run test:hlsl`; Windows Terminal ignores
   a failed shader until settings are touched or a new tab is opened.
 - Claude status line is missing: restart Claude Code, accept the trust prompt,
   and ensure `disableAllHooks` is not `true`.
-- Regular PowerShell profile has no shader: select the dedicated
-  `Claude Supernova` profile; the installer intentionally does not alter every
-  terminal profile.
+- Windows Terminal has no terminal-native shader: select the optional dedicated
+  `Claude Supernova` profile. The IDE overlay does not require this profile.
 - No object before the first Claude response: context fields can be null until
   the first API call completes.
 
