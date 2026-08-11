@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+node_modules/
+dist/
+ghostty-supernova.install.json
+ghostty-supernova.windows.install.json
+supernova-windows.generated.hlsl
+*.ghostty-supernova.tmp
+*.mp4
+*.mov
+.DS_Store

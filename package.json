@@ -1,0 +1,12 @@
+{
+  "name": "ghostty-supernova-dev",
+  "private": true,
+  "scripts": {
+    "test": "node tests/compile-shader.mjs",
+    "test:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test-windows.ps1",
+    "test:hlsl": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/compile-hlsl.ps1"
+  },
+  "devDependencies": {
+    "@webgpu/glslang": "0.0.15"
+  }
+}

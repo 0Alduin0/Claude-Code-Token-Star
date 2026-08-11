@@ -1,0 +1,288 @@
+# Ghostty Supernova
+
+Ghostty Supernova turns Claude Code's live context-window usage into a cosmic
+mass escalation inside the terminal. Windows Terminal is the primary runtime;
+Ghostty on Linux and macOS remains supported as the secondary runtime.
+
+Only context tokens are used. Test results, diff size, cost, task score, and
+productivity signals never enter either shader.
+
+![Quasar running natively in Windows Terminal](assets/windows-terminal-quasar.png)
+
+## Stages
+
+Stage changes are intentional hard cuts:
+
+| Context | Stage | Visual language |
+| ---: | --- | --- |
+| 0-15% | Red Dwarf | Small, deep-red, stable |
+| 15-35% | Main Sequence | Yellow-white surface and restrained corona |
+| 35-55% | Blue Giant | Blue-white, larger, more luminous |
+| 55-75% | Hypergiant | White-gold glare inside two clean halos |
+| 75-90% | Neutron Star | Compact cyan core with fast polar lasers |
+| 90-100% | Quasar | Black core, 600-RPS disk flow, relativistic polar jets |
+
+For example, 74% is entirely Hypergiant and 75% is immediately Neutron Star.
+A quasar is not a normal stellar phase; the project presents a deliberate
+**cosmic-mass escalation** ending in an active black-hole engine.
+
+## Windows: one-command install
+
+Requirements:
+
+- Windows Terminal 1.24 or newer
+- Claude Code
+- Windows PowerShell 5.1 or PowerShell 7
+- No Python dependency on Windows
+
+Clone the repository into a permanent folder, then install it:
+
+```powershell
+git clone https://github.com/YOUR_USERNAME/ghostty-supernova.git
+cd ghostty-supernova
+.\install
+```
+
+If you already have the source folder, open PowerShell there and run only:
+
+```powershell
+.\install
+```
+
+The longer equivalent command is:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The installer:
+
+1. Creates a separate Windows Terminal profile named `Claude Supernova`.
+2. Installs the HLSL shader and native PowerShell bridge under
+   `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\GhosttySupernova`.
+3. Connects Claude Code's `statusLine`, `SessionStart`, and `SessionEnd` events.
+4. Preserves unrelated Claude settings and hooks.
+5. Backs up a replaced status line for uninstall.
+6. Is idempotent: running it again does not duplicate hooks or profiles.
+
+Close **all** Windows Terminal windows after installation. Reopen Windows
+Terminal, click the arrow beside the new-tab button, and select
+`Claude Supernova`. Run Claude Code inside that profile:
+
+```powershell
+claude
+```
+
+Claude may ask you to trust the status-line or hook command on first use.
+After the first assistant response, the status line and shader use the real
+context-window values.
+
+## Windows: test before opening Claude
+
+Inside the `Claude Supernova` profile, enter the project directory and send
+manual values:
+
+```powershell
+cd "C:\path\to\ghostty-supernova"
+.\token-test.ps1 10
+.\token-test.ps1 25
+.\token-test.ps1 45
+.\token-test.ps1 65
+.\token-test.ps1 82 -Tokens 164000
+.\token-test.ps1 95 -Tokens 190000
+```
+
+The object should jump through Red Dwarf, Main Sequence, Blue Giant,
+Hypergiant, Neutron Star, and Quasar. A full tour and reset are available:
+
+```powershell
+.\token-test.ps1 sweep
+.\token-test.ps1 off
+```
+
+Installation diagnostics:
+
+```powershell
+.\token-test.ps1 doctor
+```
+
+## How Windows token updates reach HLSL
+
+Windows Terminal exposes `Time`, `Scale`, `Resolution`, `Background`, and the
+terminal texture to HLSL pixel shaders, but no arbitrary token uniform. The
+bridge therefore uses a controlled reload channel:
+
+```text
+Claude Code status-line JSON
+        | used_percentage + total_input_tokens + context_window_size
+        v
+token-mass-windows.ps1
+        | atomic TOKEN_LEVEL / TOKEN_MASS_K update
+        v
+supernova-windows.generated.hlsl
+        | settings timestamp requests a safe shader reload
+        v
+Windows Terminal profile "Claude Supernova"
+```
+
+The main Windows Terminal settings content is not rewritten during token
+updates. Only its modification time is touched so Terminal reloads the shader.
+The generated shader is rewritten only when the quantized level or mass
+actually changes.
+
+Microsoft documents custom HLSL through `experimental.pixelShaderPath`. The
+feature remains experimental. Windows Terminal 1.24 also supports pixel shaders
+distributed beside JSON fragment profiles.
+
+- [Windows Terminal pixel shader setting](https://learn.microsoft.com/windows/terminal/customize-settings/profile-appearance#pixel-shader-effects)
+- [Windows Terminal JSON fragments](https://learn.microsoft.com/windows/terminal/json-fragment-extensions)
+
+## Windows uninstall
+
+From the project folder:
+
+```powershell
+.\uninstall
+```
+
+Uninstall removes the `Claude Supernova` profile and installed runtime files,
+removes only this project's Claude hooks, and restores a previous status line.
+Close and reopen Windows Terminal afterward.
+
+## Linux and macOS: Ghostty install
+
+Ghostty itself currently runs on Linux and macOS. This path retains the original
+GLSL shader and OSC 12 cursor-color transport.
+
+Requirements:
+
+- Ghostty 1.3+ or compatible
+- Claude Code
+- Python 3.10+
+
+Install:
+
+```sh
+sh ./install.sh
+```
+
+Verify:
+
+```sh
+python3 token-mass.py --doctor
+```
+
+Open Ghostty, then run:
+
+```sh
+sh ./token-test.sh 0.82
+sh ./token-test.sh sweep
+claude
+```
+
+Uninstall:
+
+```sh
+sh ./uninstall.sh
+```
+
+The Ghostty bridge sends two signed OSC 12 cursor-color packets. The first
+encodes approximate absolute token mass and the second encodes 0-100% context
+fill. Ghostty exposes them as `iPreviousCursorColor` and
+`iCurrentCursorColor`. Each packet is exactly 13 bytes.
+
+## Claude Code data
+
+Both bridges read these official fields from `context_window`:
+
+- `used_percentage`
+- `total_input_tokens`
+- `context_window_size`
+
+On older or partial payloads they can derive input usage from `current_usage`
+by summing fresh input, cache creation, and cache reads. Output tokens are not
+included. Missing or temporarily null values safely fall back to zero.
+
+Lifecycle behavior:
+
+- `statusLine`: activates the shader and sends current context values.
+- `SessionStart`: activates and resets to 0%, including startup/resume/clear/compact.
+- `SessionEnd`: disables the effect and restores the plain terminal.
+
+- [Claude Code status-line data](https://code.claude.com/docs/en/statusline)
+- [Claude Code hooks](https://code.claude.com/docs/en/hooks)
+
+## Browser preview
+
+```sh
+python -m http.server 4173 --bind 127.0.0.1
+```
+
+Open `http://127.0.0.1:4173/preview.html`. The WebGL2 page provides a token
+slider, exact stage buttons, automatic tour, PNG capture, and mouse placement.
+Use `preview.html?level=95` for a precise value.
+
+Mouse placement is a browser-preview feature. Windows Terminal and stock
+Ghostty do not expose the required mouse uniform to their pixel shader.
+
+## Development tests
+
+Cross-platform Python bridge tests:
+
+```sh
+python -m unittest discover -s tests -v
+python -m compileall -q token-mass.py tests
+```
+
+GLSL/WebGL compilation:
+
+```sh
+npm ci
+npm test
+```
+
+Native Windows integration and HLSL compilation:
+
+```powershell
+npm run test:windows
+npm run test:hlsl
+```
+
+The suites cover token fallbacks, stage boundaries, exact OSC packets,
+malformed input, lifecycle events, Windows Terminal fragment installation,
+HLSL state generation, safe reload signaling, idempotent installation,
+uninstall restoration, Windows `CONOUT$`, Unix `/dev/tty`, and ancestor-TTY
+fallback. GitHub Actions runs Linux, Windows, GLSL, and HLSL jobs.
+
+## Troubleshooting
+
+- No `Claude Supernova` profile: close every Windows Terminal process and
+  reopen it; fragments are discovered when settings reload.
+- Profile opens but no object: run `.\token-test.ps1 doctor`, then
+  `.\token-test.ps1 95` inside that profile.
+- Shader compilation warning: run `npm run test:hlsl`; Windows Terminal ignores
+  a failed shader until settings are touched or a new tab is opened.
+- Claude status line is missing: restart Claude Code, accept the trust prompt,
+  and ensure `disableAllHooks` is not `true`.
+- Regular PowerShell profile has no shader: select the dedicated
+  `Claude Supernova` profile; the installer intentionally does not alter every
+  terminal profile.
+- No object before the first Claude response: context fields can be null until
+  the first API call completes.
+
+## Scientific note
+
+NASA describes stellar evolution as mass-dependent: massive stars can leave a
+neutron star or black hole. NASA describes quasars as active galactic nuclei
+powered by matter falling toward supermassive black holes. This visualization
+joins those ideas into an increasing-mass journey rather than claiming one
+literal stellar lifecycle.
+
+- [NASA: Star Lifecycle](https://science.nasa.gov/mission/webb/star-lifecycle/)
+- [NASA: What Are Active Galactic Nuclei?](https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-are-active-galactic-nuclei/)
+
+## License and attribution
+
+MIT. The Ghostty cursor-color transport and ancestor-TTY fallback are adapted
+from [`s0xDk/ghostty-blackhole`](https://github.com/s0xDk/ghostty-blackhole),
+also MIT-licensed. See `LICENSE` and `THIRD_PARTY_NOTICES.md`.
