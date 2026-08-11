@@ -36,18 +36,23 @@ Requirements:
 - Windows PowerShell 5.1 or PowerShell 7
 - No Python dependency on Windows
 
-Clone the repository into a permanent folder, then install it:
+Open the built-in terminal at the root of the project where you want to use
+Claude. Clone the visualizer into a hidden subfolder and run it without changing
+directories:
 
 ```powershell
-git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git
-cd Claude-Code-Token-Star
-.\install
+git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git .claude-token-star
+.\.claude-token-star\install
 ```
 
-If you already have the source folder, open PowerShell there and run only:
+Because the terminal remains at your project's root, Claude starts in that
+project. Do not `cd` into `.claude-token-star` first.
+
+To update an existing installation from the same project terminal:
 
 ```powershell
-.\install
+git -C .claude-token-star pull
+.\.claude-token-star\install
 ```
 
 Installation starts the overlay invisibly in the background, then starts
@@ -64,7 +69,7 @@ reboot when Claude is next used.
 The longer equivalent command is:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\install.ps1
 ```
 
 The installer:
@@ -91,31 +96,30 @@ context-window values.
 
 ## Windows: manual stage test
 
-From the cloned repository, send manual values while a supported IDE is the
+From the project root, send manual values while a supported IDE is the
 foreground window:
 
 ```powershell
-cd "C:\path\to\ghostty-supernova"
-.\token-test.ps1 10
-.\token-test.ps1 25
-.\token-test.ps1 45
-.\token-test.ps1 65
-.\token-test.ps1 82 -Tokens 164000
-.\token-test.ps1 95 -Tokens 190000
+.\.claude-token-star\token-test.ps1 10
+.\.claude-token-star\token-test.ps1 25
+.\.claude-token-star\token-test.ps1 45
+.\.claude-token-star\token-test.ps1 65
+.\.claude-token-star\token-test.ps1 82 -Tokens 164000
+.\.claude-token-star\token-test.ps1 95 -Tokens 190000
 ```
 
 The object should jump through Red Dwarf, Main Sequence, Blue Giant,
 Hypergiant, Neutron Star, and Quasar. A full tour and reset are available:
 
 ```powershell
-.\token-test.ps1 sweep
-.\token-test.ps1 off
+.\.claude-token-star\token-test.ps1 sweep
+.\.claude-token-star\token-test.ps1 off
 ```
 
 Installation diagnostics:
 
 ```powershell
-.\token-test.ps1 doctor
+.\.claude-token-star\token-test.ps1 doctor
 ```
 
 ## How Windows token updates reach the visuals
@@ -148,10 +152,10 @@ distributed beside JSON fragment profiles.
 
 ## Windows uninstall
 
-From the project folder:
+From the project root:
 
 ```powershell
-.\uninstall
+.\.claude-token-star\uninstall
 ```
 
 Uninstall stops and removes the IDE overlay, removes the optional
@@ -266,10 +270,11 @@ fallback. GitHub Actions runs Linux, Windows, GLSL, and HLSL jobs.
 
 ## Troubleshooting
 
-- No overlay in PyCharm: keep PyCharm focused and run `.\token-test.ps1 95`.
+- No overlay in PyCharm: keep PyCharm focused and run
+  `.\.claude-token-star\token-test.ps1 95`.
   The object is deliberately hidden while another application is foreground.
-- Overlay does not respond: run `.\token-test.ps1 doctor`, then reinstall with
-  `.\install`.
+- Overlay does not respond: run `.\.claude-token-star\token-test.ps1 doctor`,
+  then reinstall with `.\.claude-token-star\install`.
 - No optional `Claude Supernova` profile: close every Windows Terminal process
   and reopen it; fragments are discovered when settings reload.
 - Shader compilation warning: run `npm run test:hlsl`; Windows Terminal ignores
