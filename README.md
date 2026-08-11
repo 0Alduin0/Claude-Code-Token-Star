@@ -38,8 +38,8 @@ Requirements:
 Clone the repository into a permanent folder, then install it:
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/ghostty-supernova.git
-cd ghostty-supernova
+git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git
+cd Claude-Code-Token-Star
 .\install
 ```
 
