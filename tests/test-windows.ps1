@@ -24,6 +24,13 @@ function Get-CanonicalDirectoryPath {
     )
 }
 
+function Test-SameDirectoryPath {
+    param([string]$Actual, [string]$Expected)
+    $actualPath = Get-CanonicalDirectoryPath $Actual
+    $expectedPath = Get-CanonicalDirectoryPath $Expected
+    return $actualPath.Equals($expectedPath, [StringComparison]::OrdinalIgnoreCase)
+}
+
 try {
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $ClaudeSettings)) | Out-Null
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $TerminalSettings)) | Out-Null
@@ -105,11 +112,8 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1")) "IDE overlay missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) "overlay enable marker missing"
     $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
-    $expectedScopeRoot = Get-CanonicalDirectoryPath $ScopedProject
-    $actualScopeRoot = Get-CanonicalDirectoryPath ([string]$projectScope.root)
-    Assert-True (
-        $actualScopeRoot.Equals($expectedScopeRoot, [StringComparison]::OrdinalIgnoreCase)
-    ) "project scope root is wrong (expected '$expectedScopeRoot', got '$actualScopeRoot')"
+    Assert-True (Test-SameDirectoryPath ([string]$projectScope.root) $ScopedProject) `
+        "project scope root is wrong (expected '$ScopedProject', got '$($projectScope.root)')"
     Assert-True ($projectScope.name -eq "ScopedProject") "project scope name is wrong"
     $terminalProfile = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "profile.json")) | ConvertFrom-Json
     Assert-True ($terminalProfile.profiles[0].commandline -match "claude") "Terminal profile does not auto-start Claude"
@@ -169,7 +173,7 @@ try {
     Assert-True ([long]$overlayState.tokens -eq 190000) "overlay token mass is wrong"
     Assert-True ([bool]$overlayState.active) "overlay was not activated"
     Assert-True ($overlayState.stage -eq "QUASAR") "overlay stage is wrong"
-    Assert-True ($overlayState.project_root -eq $ScopedProject) "overlay project root is wrong"
+    Assert-True (Test-SameDirectoryPath ([string]$overlayState.project_root) $ScopedProject) "overlay project root is wrong"
     Assert-True ($overlayState.project_name -eq "ScopedProject") "overlay project name is wrong"
     Assert-True ([long]$overlayState.breakdown.fresh_input_tokens -eq 85000) "fresh input breakdown is wrong"
     Assert-True ([long]$overlayState.breakdown.cache_creation_input_tokens -eq 60000) "cache creation breakdown is wrong"
@@ -210,7 +214,7 @@ try {
     }
     finally { Pop-Location }
     $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
-    Assert-True ($projectScope.root -eq $installProject) "hidden clone was incorrectly used as the project scope"
+    Assert-True (Test-SameDirectoryPath ([string]$projectScope.root) $installProject) "hidden clone was incorrectly used as the project scope"
 
     & (Join-Path $Root "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
