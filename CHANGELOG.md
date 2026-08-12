@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## 2.6.1 - 2026-08-12
+
+- Replaced the stage-slideshow GIF with a 60-frame recording of the real
+  animated quasar overlay.
+- Moved all six stellar-stage screenshots to the top of the README so every
+  visual state is immediately visible.
+
 ## 2.6.0 - 2026-08-12
 
 - Added a project-scoped Windows overlay for JetBrains IDEs, VS Code, Cursor,

@@ -1,6 +1,6 @@
 {
   "name": "claude-token-star",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Live star overlay that visualizes Claude Code context usage.",
   "license": "MIT",
   "type": "module",
