@@ -219,21 +219,21 @@ public static class TokenStarNative {
              Cursor="SizeAll" />
 
     <Border Name="MassPanel" Background="#F203060C" BorderBrush="#CC5F91BF"
-            BorderThickness="1" CornerRadius="4" Padding="7,3" Opacity="0">
+            BorderThickness="1" CornerRadius="4" Padding="5,2" Opacity="0">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="28" />
+          <ColumnDefinition Width="24" />
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Name="MassText" Text="MASS 0K" Foreground="#FFF8FCFF"
-                   FontFamily="Consolas" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                   FontFamily="Consolas" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
-                   FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Margin="4,0,4,0" />
+                   FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" Margin="3,0,3,0" />
         <Button Grid.Column="2" Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
                 Foreground="#FFFFFFFF" Background="#FF14283B" BorderBrush="#FF527CA4"
-                BorderThickness="1,0,0,0" MinWidth="28" FontWeight="Bold"
-                FontSize="12" Padding="5,0" Margin="0,-3,-7,-3"
+                BorderThickness="1,0,0,0" MinWidth="24" FontWeight="Bold"
+                FontSize="10" Padding="4,0" Margin="0,-2,-5,-2"
                 Cursor="Hand" Focusable="False" />
       </Grid>
     </Border>
@@ -537,10 +537,6 @@ function Get-DetailsText {
     $limits = $State.rate_limits
     return @(
         "Total input     $(Format-TokenDetail (Get-BreakdownToken $breakdown 'total_input_tokens' 0L))"
-        "System prompt   $(Format-TokenDetail (Get-BreakdownToken $breakdown 'system_prompt_tokens'))"
-        "System tools    $(Format-TokenDetail (Get-BreakdownToken $breakdown 'system_tools_tokens'))"
-        "Memory files    $(Format-TokenDetail (Get-BreakdownToken $breakdown 'memory_files_tokens'))"
-        "Skills          $(Format-TokenDetail (Get-BreakdownToken $breakdown 'skills_tokens'))"
         "Cache read      $(Format-TokenDetail (Get-BreakdownToken $breakdown 'cache_read_input_tokens' 0L))"
         "Remaining       $(Format-TokenDetail (Get-BreakdownToken $breakdown 'remaining_tokens' 0L))"
         ""
@@ -550,7 +546,7 @@ function Get-DetailsText {
     ) -join "`n"
 }
 
-$EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; system_prompt_tokens = -1L; system_tools_tokens = -1L; memory_files_tokens = -1L; skills_tokens = -1L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
+$EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
 $EmptyRateLimits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L }; seven_day = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L } }
 $State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
 $LastStateWrite = [datetime]::MinValue
@@ -593,7 +589,7 @@ function Read-TokenState {
             stage = Get-Stage $demoNormalized
             project_root = ""
             project_name = ""
-            breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; system_prompt_tokens = [long][Math]::Round($demoTokens * 0.09); system_tools_tokens = [long][Math]::Round($demoTokens * 0.06); memory_files_tokens = [long][Math]::Round($demoTokens * 0.025); skills_tokens = [long][Math]::Round($demoTokens * 0.015); cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
+            breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
             rate_limits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = 61.0; resets_at = $demoReset }; seven_day = [pscustomobject]@{ used_percentage = 34.0; resets_at = [DateTimeOffset]::UtcNow.AddDays(3).ToUnixTimeSeconds() } }
         }
         return
@@ -843,6 +839,9 @@ function Update-HitTestMode {
     $script:DragHandleActive = $overStar
     $script:InteractivePanelActive = $overPanel
     $MassPanel.BorderBrush = if ($overPanel) { $HoverPanelBorder } else { $DefaultPanelBorder }
+    if ($Window.Opacity -gt 0.01) {
+        $MassPanel.Opacity = if ($overPanel) { 0.96 } else { 0.46 }
+    }
     $shouldClickThrough = -not ($overStar -or $overPanel -or $overDetails)
     if ($shouldClickThrough -ne $script:ClickThroughEnabled) {
         $GWL_EXSTYLE = -20
@@ -883,6 +882,7 @@ function Toggle-DetailsPanel {
     $DetailsButton.Content = if ($script:DetailsOpen) { $script:UpArrow } else { $script:DownArrow }
     $DetailsPanel.Visibility = if ($script:DetailsOpen) { "Visible" } else { "Collapsed" }
     $DetailsPanel.Opacity = if ($script:DetailsOpen) { 1.0 } else { 0.0 }
+    $MassPanel.Opacity = if ($script:InteractivePanelActive) { 0.96 } else { 0.46 }
     if ($script:LastHostWindow -and $script:LastHostWindow.Handle) {
         [void][TokenStarNative]::SetForegroundWindow($script:LastHostWindow.Handle)
     }
@@ -1209,7 +1209,10 @@ function Update-Visual {
         else { $detailsBelow }
         [Windows.Controls.Canvas]::SetTop($DetailsPanel, [Math]::Max(4.0, $detailsTop))
     }
-    $MassPanel.Opacity = if ($visible -or $SelfTest) { 1.0 } else { 0.0 }
+    $MassPanel.Opacity = if ($visible -or $SelfTest) {
+        if ($script:InteractivePanelActive -or $SelfTest) { 0.96 } else { 0.46 }
+    }
+    else { 0.0 }
 }
 
 $Window.Add_SourceInitialized({

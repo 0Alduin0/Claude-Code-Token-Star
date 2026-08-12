@@ -86,19 +86,6 @@ function Get-ObjectProperty {
     return $property.Value
 }
 
-function Get-OptionalTokenValue {
-    param($Object, [string[]]$Names)
-    foreach ($name in $Names) {
-        $value = Get-ObjectProperty $Object $name
-        if ($null -ne $value) {
-            $number = Get-NumberValue $value -1.0
-            if ($number -lt 0.0) { return -1L }
-            return [long][Math]::Round($number)
-        }
-    }
-    return -1L
-}
-
 function Get-ProjectScope {
     if (-not (Test-Path -LiteralPath $ProjectScopePath)) { return $null }
     try { return [System.IO.File]::ReadAllText($ProjectScopePath) | ConvertFrom-Json }
@@ -147,9 +134,6 @@ function Get-ContextStats {
     $windowRaw = Get-ObjectProperty $context "context_window_size"
     $outputRaw = Get-ObjectProperty $context "total_output_tokens"
     $usage = Get-ObjectProperty $context "current_usage"
-    $breakdown = Get-ObjectProperty $context "breakdown"
-    if ($null -eq $breakdown) { $breakdown = Get-ObjectProperty $Data "context_breakdown" }
-    if ($null -eq $breakdown) { $breakdown = Get-ObjectProperty $Data "context_window_breakdown" }
     $freshInput = [Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $usage "input_tokens") 0.0))
     $cacheCreation = [Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $usage "cache_creation_input_tokens") 0.0))
     $cacheRead = [Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $usage "cache_read_input_tokens") 0.0))
@@ -188,10 +172,6 @@ function Get-ContextStats {
         CacheCreation = [long][Math]::Round($cacheCreation)
         CacheRead = [long][Math]::Round($cacheRead)
         OutputTokens = [long][Math]::Round($outputTokens)
-        SystemPrompt = Get-OptionalTokenValue $breakdown @("system_prompt_tokens", "system_prompt")
-        SystemTools = Get-OptionalTokenValue $breakdown @("system_tools_tokens", "tool_definitions_tokens", "system_tools")
-        MemoryFiles = Get-OptionalTokenValue $breakdown @("memory_files_tokens", "memory_tokens", "memory_files")
-        Skills = Get-OptionalTokenValue $breakdown @("skills_tokens", "skill_tokens", "skills")
         FiveHourUsed = Get-NumberValue (Get-ObjectProperty $fiveHour "used_percentage") -1.0
         FiveHourResetsAt = [long][Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $fiveHour "resets_at") 0.0))
         SevenDayUsed = Get-NumberValue (Get-ObjectProperty $sevenDay "used_percentage") -1.0
@@ -227,10 +207,6 @@ function Write-TokenState {
         fresh_input_tokens = if ($Breakdown) { [Math]::Max(0L, [long]$Breakdown.FreshInput) } else { 0L }
         cache_creation_input_tokens = if ($Breakdown) { [Math]::Max(0L, [long]$Breakdown.CacheCreation) } else { 0L }
         cache_read_input_tokens = if ($Breakdown) { [Math]::Max(0L, [long]$Breakdown.CacheRead) } else { 0L }
-        system_prompt_tokens = if ($Breakdown) { Get-OptionalTokenValue $Breakdown @("SystemPrompt") } else { -1L }
-        system_tools_tokens = if ($Breakdown) { Get-OptionalTokenValue $Breakdown @("SystemTools") } else { -1L }
-        memory_files_tokens = if ($Breakdown) { Get-OptionalTokenValue $Breakdown @("MemoryFiles") } else { -1L }
-        skills_tokens = if ($Breakdown) { Get-OptionalTokenValue $Breakdown @("Skills") } else { -1L }
         context_window_size = $windowSize
         remaining_tokens = if ($windowSize -gt 0) { [Math]::Max(0L, $windowSize - $UsedTokens) } else { 0L }
     }
@@ -415,7 +391,7 @@ if ($PSCmdlet.ParameterSetName -eq "Manual") {
     }
     $normalized = if ($Level -gt 1.0) { $Level / 100.0 } else { $Level }
     $usedTokens = if ($Tokens -ge 0) { $Tokens } else { [long][Math]::Round($WindowSize * $normalized) }
-    $manualBreakdown = [pscustomobject]@{ WindowSize = $WindowSize; FreshInput = $usedTokens; CacheCreation = 0L; CacheRead = 0L; OutputTokens = 0L; SystemPrompt = -1L; SystemTools = -1L; MemoryFiles = -1L; Skills = -1L; FiveHourUsed = -1.0; FiveHourResetsAt = 0L; SevenDayUsed = -1.0; SevenDayResetsAt = 0L }
+    $manualBreakdown = [pscustomobject]@{ WindowSize = $WindowSize; FreshInput = $usedTokens; CacheCreation = 0L; CacheRead = 0L; OutputTokens = 0L; FiveHourUsed = -1.0; FiveHourResetsAt = 0L; SevenDayUsed = -1.0; SevenDayResetsAt = 0L }
     Write-ShaderState $normalized $usedTokens $true $manualBreakdown
     Write-Output "MASS $(Format-TokenCount $usedTokens) - $([Math]::Round($normalized * 100))% - $(Get-StageName $normalized)"
     exit 0

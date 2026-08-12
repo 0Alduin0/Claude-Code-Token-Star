@@ -48,16 +48,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\ins
 - Drag the star itself to move it, including close to IDE corners and edges.
 - `MASS 85K` means about 85,000 context tokens.
 - `5H %61 | 2h 23m` shows five-hour usage and time until reset.
-- Click the arrow for total input, system prompt, system tools, memory files,
-  skills, cache read, remaining context, five-hour limit, reset time, and
-  seven-day limit.
+- Click the arrow for total input, cache read, remaining context, five-hour
+  limit, reset time, and seven-day limit.
 - Use `1x`, `2x`, or `3x` at the bottom of the menu to resize the star. `1x` is
   one-third of the original size; `3x` is the original size.
 - The star hides when you switch to another project.
-
-Claude Code's current [status-line data](https://code.claude.com/docs/en/statusline)
-does not expose separate system prompt, system tools, memory files, or skills
-token counts. Those rows show `--` unless Claude adds them to the payload.
 
 <img src="assets/overlay-token-details.png" width="500" alt="Token details and star size menu">
 
