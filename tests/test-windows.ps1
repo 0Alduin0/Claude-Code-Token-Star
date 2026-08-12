@@ -16,6 +16,14 @@ function Assert-True {
     if (-not $Condition) { throw "Assertion failed: $Message" }
 }
 
+function Get-CanonicalDirectoryPath {
+    param([string]$Path)
+    return (Get-Item -LiteralPath $Path -ErrorAction Stop).FullName.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+}
+
 try {
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $ClaudeSettings)) | Out-Null
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $TerminalSettings)) | Out-Null
@@ -97,7 +105,11 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1")) "IDE overlay missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) "overlay enable marker missing"
     $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
-    Assert-True ($projectScope.root -eq $ScopedProject) "project scope root is wrong"
+    $expectedScopeRoot = Get-CanonicalDirectoryPath $ScopedProject
+    $actualScopeRoot = Get-CanonicalDirectoryPath ([string]$projectScope.root)
+    Assert-True (
+        $actualScopeRoot.Equals($expectedScopeRoot, [StringComparison]::OrdinalIgnoreCase)
+    ) "project scope root is wrong (expected '$expectedScopeRoot', got '$actualScopeRoot')"
     Assert-True ($projectScope.name -eq "ScopedProject") "project scope name is wrong"
     $terminalProfile = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "profile.json")) | ConvertFrom-Json
     Assert-True ($terminalProfile.profiles[0].commandline -match "claude") "Terminal profile does not auto-start Claude"
