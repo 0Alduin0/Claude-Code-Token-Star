@@ -6,6 +6,8 @@ $TerminalSettings = Join-Path $TemporaryRoot "terminal\settings.json"
 $RuntimeRoot = Join-Path $TemporaryRoot "runtime"
 $LegacyState = Join-Path $TemporaryRoot ".claude\ghostty-supernova.install.json"
 $LegacyGhosttyConfig = Join-Path $TemporaryRoot "ghostty\config.ghostty"
+$ScopedProject = Join-Path $TemporaryRoot "ScopedProject"
+$OtherProject = Join-Path $TemporaryRoot "OtherProject"
 $LegacyCommand = "python C:\legacy\ghostty-supernova\token-mass.py"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
@@ -18,6 +20,9 @@ try {
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $ClaudeSettings)) | Out-Null
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $TerminalSettings)) | Out-Null
     [System.IO.Directory]::CreateDirectory((Split-Path -Parent $LegacyGhosttyConfig)) | Out-Null
+    [System.IO.Directory]::CreateDirectory($ScopedProject) | Out-Null
+    [System.IO.Directory]::CreateDirectory($OtherProject) | Out-Null
+    $env:GHOSTTY_SUPERNOVA_DISABLE_OVERLAY = "1"
     $initialSettings = [ordered]@{
         permissions = [ordered]@{ allow = @("Read") }
         statusLine = [ordered]@{ type = "command"; command = $LegacyCommand }
@@ -65,6 +70,7 @@ try {
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
+        -ProjectPath $ScopedProject `
         -SkipVersionCheck `
         -NoLaunch | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "installer returned a failure"
@@ -74,6 +80,7 @@ try {
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
+        -ProjectPath $ScopedProject `
         -SkipVersionCheck `
         -NoLaunch | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
@@ -82,6 +89,10 @@ try {
     Assert-True ($settings.statusLine.command -match "token-mass-windows\.ps1") "statusLine bridge missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "profile.json")) "Terminal fragment missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1")) "IDE overlay missing"
+    Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) "overlay enable marker missing"
+    $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
+    Assert-True ($projectScope.root -eq $ScopedProject) "project scope root is wrong"
+    Assert-True ($projectScope.name -eq "ScopedProject") "project scope name is wrong"
     $terminalProfile = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "profile.json")) | ConvertFrom-Json
     Assert-True ($terminalProfile.profiles[0].commandline -match "claude") "Terminal profile does not auto-start Claude"
     Assert-True (-not (Test-Path -LiteralPath $LegacyState)) "legacy install state was not migrated"
@@ -95,9 +106,9 @@ try {
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
-        -ProjectPath $TemporaryRoot `
+        -ProjectPath $ScopedProject `
         -SkipVersionCheck | Out-Null
-    Assert-True ($global:TokenStarTestClaudePath -eq $TemporaryRoot) "installer did not start Claude in the current terminal/project"
+    Assert-True ($global:TokenStarTestClaudePath -eq $ScopedProject) "installer did not start Claude in the current terminal/project"
     Remove-Item Function:\global:claude -ErrorAction SilentlyContinue
     Remove-Variable TokenStarTestClaudePath -Scope Global -ErrorAction SilentlyContinue
 
@@ -106,8 +117,28 @@ try {
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
     $before = (Get-Item -LiteralPath $TerminalSettings).LastWriteTimeUtc
     Start-Sleep -Milliseconds 20
-    $output = '{"context_window":{"used_percentage":95,"total_input_tokens":190000,"context_window_size":200000},"model":{"display_name":"Opus"}}' |
-        & $bridge
+    $fiveHourReset = [DateTimeOffset]::UtcNow.AddHours(2).AddMinutes(23).ToUnixTimeSeconds()
+    $statusPayload = [ordered]@{
+        workspace = [ordered]@{ project_dir = $ScopedProject; current_dir = $ScopedProject }
+        context_window = [ordered]@{
+            used_percentage = 95
+            total_input_tokens = 190000
+            total_output_tokens = 3210
+            context_window_size = 200000
+            current_usage = [ordered]@{
+                input_tokens = 85000
+                cache_creation_input_tokens = 60000
+                cache_read_input_tokens = 45000
+                output_tokens = 3210
+            }
+        }
+        rate_limits = [ordered]@{
+            five_hour = [ordered]@{ used_percentage = 61; resets_at = $fiveHourReset }
+            seven_day = [ordered]@{ used_percentage = 28; resets_at = 0 }
+        }
+        model = [ordered]@{ display_name = "Opus" }
+    }
+    $output = ($statusPayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge
     Assert-True (($output -join "") -match "95% - QUASAR - Opus") "status line output is wrong"
     $shader = [System.IO.File]::ReadAllText($generated)
     Assert-True ($shader.StartsWith("#define TOKEN_LEVEL 0.95")) "level define is wrong"
@@ -120,8 +151,25 @@ try {
     Assert-True ([long]$overlayState.tokens -eq 190000) "overlay token mass is wrong"
     Assert-True ([bool]$overlayState.active) "overlay was not activated"
     Assert-True ($overlayState.stage -eq "QUASAR") "overlay stage is wrong"
+    Assert-True ($overlayState.project_root -eq $ScopedProject) "overlay project root is wrong"
+    Assert-True ($overlayState.project_name -eq "ScopedProject") "overlay project name is wrong"
+    Assert-True ([long]$overlayState.breakdown.fresh_input_tokens -eq 85000) "fresh input breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.cache_creation_input_tokens -eq 60000) "cache creation breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.cache_read_input_tokens -eq 45000) "cache read breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.total_output_tokens -eq 3210) "output token breakdown is wrong"
+    Assert-True ([double]$overlayState.rate_limits.five_hour.used_percentage -eq 61) "five-hour percentage is wrong"
+    Assert-True ([long]$overlayState.rate_limits.five_hour.resets_at -eq $fiveHourReset) "five-hour reset is wrong"
 
-    '{"hook_event_name":"SessionEnd"}' | & $bridge
+    $outsidePayload = [ordered]@{
+        workspace = [ordered]@{ project_dir = $OtherProject; current_dir = $OtherProject }
+        context_window = [ordered]@{ used_percentage = 50; total_input_tokens = 100000; context_window_size = 200000 }
+    }
+    $outsideOutput = ($outsidePayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge
+    Assert-True ([string]::IsNullOrWhiteSpace(($outsideOutput -join ""))) "status line leaked into another project"
+    $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
+    Assert-True (-not [bool]$overlayState.active) "overlay remained active in another project"
+
+    ([ordered]@{ hook_event_name = "SessionEnd"; workspace = [ordered]@{ project_dir = $ScopedProject } } | ConvertTo-Json -Compress) | & $bridge
     $shader = [System.IO.File]::ReadAllText($generated)
     Assert-True ($shader -match "#define TOKEN_ACTIVE 0") "SessionEnd did not disable the shader"
     $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
@@ -138,6 +186,8 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1"))) "overlay was not removed"
     Assert-True (-not (Test-Path -LiteralPath $overlayStatePath)) "overlay state was not removed"
     Assert-True (-not (Test-Path -LiteralPath $overlayPositionPath)) "saved overlay position was not removed"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "project-scope.json"))) "project scope was not removed"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled"))) "overlay marker was not removed"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $ClaudeSettings) "ghostty-supernova.windows.install.json"))) "install state was not removed"
 
     Write-Output "Windows bridge/install/uninstall integration tests passed."
@@ -146,6 +196,7 @@ finally {
     Remove-Item Function:\global:claude -ErrorAction SilentlyContinue
     Remove-Variable TokenStarTestClaudePath -Scope Global -ErrorAction SilentlyContinue
     Remove-Item Env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS -ErrorAction SilentlyContinue
+    Remove-Item Env:GHOSTTY_SUPERNOVA_DISABLE_OVERLAY -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $TemporaryRoot) {
         Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force
     }

@@ -2,6 +2,8 @@
 param(
     [string]$StatePath,
     [string]$PositionPath,
+    [string]$PidPath,
+    [string]$StopPath,
     [switch]$SelfTest,
     [switch]$Demo,
     [double]$DemoLevel = -1.0
@@ -15,6 +17,13 @@ if ([string]::IsNullOrWhiteSpace($StatePath)) {
 if ([string]::IsNullOrWhiteSpace($PositionPath)) {
     $PositionPath = Join-Path $ScriptRoot "overlay-position.json"
 }
+if ([string]::IsNullOrWhiteSpace($PidPath)) {
+    $PidPath = Join-Path $ScriptRoot "token-star-overlay.pid.json"
+}
+if ([string]::IsNullOrWhiteSpace($StopPath)) {
+    $StopPath = Join-Path $ScriptRoot "token-star-overlay.stop"
+}
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
@@ -24,6 +33,17 @@ $OverlayMutex = New-Object System.Threading.Mutex($true, "Local\ClaudeCodeTokenS
 if (-not $CreatedNew -and -not $SelfTest) {
     $OverlayMutex.Dispose()
     exit 0
+}
+if (-not $SelfTest) {
+    $process = Get-Process -Id $PID
+    $pidRecord = [ordered]@{
+        schema = 1
+        pid = $PID
+        started_utc = $process.StartTime.ToUniversalTime().ToString("o")
+    }
+    [IO.File]::WriteAllText($PidPath + ".tmp", ($pidRecord | ConvertTo-Json -Compress) + "`n", $Utf8NoBom)
+    Move-Item -LiteralPath ($PidPath + ".tmp") -Destination $PidPath -Force
+    Remove-Item -LiteralPath $StopPath -Force -ErrorAction SilentlyContinue
 }
 
 Add-Type @"
@@ -39,6 +59,8 @@ public static class TokenStarNative {
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowTextLength(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int maxCount);
     [DllImport("user32.dll", SetLastError=true)] public static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll", SetLastError=true)] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
@@ -47,10 +69,10 @@ public static class TokenStarNative {
 
 [xml]$Xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Width="500" Height="380" WindowStyle="None" AllowsTransparency="True"
+        Width="500" Height="500" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" Topmost="True" ShowInTaskbar="False"
         ShowActivated="False" Focusable="False" ResizeMode="NoResize">
-  <Canvas Name="Root" Width="500" Height="380">
+  <Canvas Name="Root" Width="500" Height="500">
     <Canvas Name="Stars" />
     <Ellipse Name="Nebula" Opacity="0">
     </Ellipse>
@@ -164,14 +186,26 @@ public static class TokenStarNative {
       <Path.RenderTransform><RotateTransform Angle="-12" CenterX="310" CenterY="165" /></Path.RenderTransform>
     </Path>
 
+    <Ellipse Name="DragHandle" Width="92" Height="92" Fill="#01000000"
+             Cursor="SizeAll" ToolTip="Drag the token star" />
+
     <Border Name="MassPanel" Background="#F203060C" BorderBrush="#CC5F91BF"
-            BorderThickness="1" CornerRadius="4" Padding="8,4" Opacity="0"
-            Cursor="SizeAll" ToolTip="Drag this label to move the token star">
+            BorderThickness="1" CornerRadius="4" Padding="8,4" Opacity="0">
       <StackPanel Orientation="Horizontal">
-        <TextBlock Name="MassText" Text="MASS 0K" Foreground="#FFF8FCFF"
-                   FontFamily="Consolas" FontWeight="Bold" FontSize="16" />
-        <TextBlock Text="  MOVE" Foreground="#FF7EA8CC" FontSize="12" FontWeight="Bold" />
+        <TextBlock Name="MassText" Text="MASS 0" Foreground="#FFF8FCFF"
+                   FontFamily="Consolas" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
+        <TextBlock Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
+                   FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="5,0,0,0" />
+        <Button Name="DetailsButton" Content="&#x25BC;" ToolTip="Token details"
+                Foreground="#FFB8D8F8" Background="Transparent" BorderThickness="0"
+                FontSize="12" Padding="8,0,0,0" Cursor="Hand" Focusable="False" />
       </StackPanel>
+    </Border>
+    <Border Name="DetailsPanel" Width="250" Background="#F203060C" BorderBrush="#AA4C7199"
+            BorderThickness="1" CornerRadius="4" Padding="10,8" Opacity="0"
+            Visibility="Collapsed" IsHitTestVisible="False">
+      <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Consolas"
+                 FontSize="12" LineHeight="18" />
     </Border>
   </Canvas>
 </Window>
@@ -204,8 +238,13 @@ $DiskHot = $Window.FindName("DiskHot")
 $BlackCore = $Window.FindName("BlackCore")
 $DiskFrontGlow = $Window.FindName("DiskFrontGlow")
 $DiskFront = $Window.FindName("DiskFront")
+$DragHandle = $Window.FindName("DragHandle")
 $MassPanel = $Window.FindName("MassPanel")
 $MassText = $Window.FindName("MassText")
+$RateText = $Window.FindName("RateText")
+$DetailsButton = $Window.FindName("DetailsButton")
+$DetailsPanel = $Window.FindName("DetailsPanel")
+$DetailsText = $Window.FindName("DetailsText")
 
 foreach ($visual in @(
     $Stars, $Nebula, $PulseRingOuter, $PulseRingInner, $Rays, $Particles,
@@ -216,6 +255,7 @@ foreach ($visual in @(
 )) {
     $visual.IsHitTestVisible = $false
 }
+$DragHandle.IsHitTestVisible = $true
 $MassPanel.IsHitTestVisible = $true
 
 $CenterX = 310.0
@@ -321,17 +361,58 @@ function Get-Stage([double]$Level) {
 }
 
 function Format-Mass([long]$Tokens) {
-    if ($Tokens -ge 1000000) { return "{0:0.00}M" -f ($Tokens / 1000000.0) }
-    if ($Tokens -ge 1000) { return "{0:0}K" -f ($Tokens / 1000.0) }
+    if ($Tokens -ge 1000) { return "{0:0}" -f ($Tokens / 1000.0) }
     return [string]$Tokens
 }
 
-$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF" }
+function Format-TokenDetail([long]$Tokens) {
+    return $Tokens.ToString("N0", [Globalization.CultureInfo]::CurrentCulture)
+}
+
+function Format-ResetRemaining([long]$EpochSeconds) {
+    if ($EpochSeconds -le 0) { return "--" }
+    $remaining = [DateTimeOffset]::FromUnixTimeSeconds($EpochSeconds) - [DateTimeOffset]::UtcNow
+    if ($remaining.TotalSeconds -le 0) { return "now" }
+    if ($remaining.TotalHours -ge 1.0) {
+        return ("{0}h {1}m" -f [Math]::Floor($remaining.TotalHours), $remaining.Minutes)
+    }
+    return ("{0}m" -f [Math]::Max(1, [Math]::Ceiling($remaining.TotalMinutes)))
+}
+
+function Get-RateSummary {
+    $fiveHour = $State.rate_limits.five_hour
+    $used = [double]$fiveHour.used_percentage
+    if ($used -lt 0.0) { return "5H -- | --" }
+    return ("5H %{0} | {1}" -f [Math]::Round($used), (Format-ResetRemaining ([long]$fiveHour.resets_at)))
+}
+
+function Get-DetailsText {
+    $breakdown = $State.breakdown
+    $limits = $State.rate_limits
+    return @(
+        "CONTEXT $([Math]::Round([double]$State.level * 100))%"
+        "Total input       $(Format-TokenDetail ([long]$breakdown.total_input_tokens))"
+        "Fresh input       $(Format-TokenDetail ([long]$breakdown.fresh_input_tokens))"
+        "Cache creation    $(Format-TokenDetail ([long]$breakdown.cache_creation_input_tokens))"
+        "Cache read        $(Format-TokenDetail ([long]$breakdown.cache_read_input_tokens))"
+        "Last output       $(Format-TokenDetail ([long]$breakdown.total_output_tokens))"
+        "Remaining         $(Format-TokenDetail ([long]$breakdown.remaining_tokens))"
+        ""
+        "5-hour limit      $(if ([double]$limits.five_hour.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.five_hour.used_percentage) } else { '--' })"
+        "Resets in         $(Format-ResetRemaining ([long]$limits.five_hour.resets_at))"
+        "7-day limit       $(if ([double]$limits.seven_day.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.seven_day.used_percentage) } else { '--' })"
+    ) -join "`n"
+}
+
+$EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; total_output_tokens = 0L; fresh_input_tokens = 0L; cache_creation_input_tokens = 0L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
+$EmptyRateLimits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L }; seven_day = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L } }
+$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
 $LastStateWrite = [datetime]::MinValue
 $OverlayPosition = [pscustomobject]@{ x = 0.96; y = 0.06 }
 $LastHostWindow = $null
 $LastHostSignature = ""
 $LastMassLayoutKey = ""
+$LastDetailsText = ""
 $NextStatePoll = 0.0
 $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
@@ -351,17 +432,24 @@ if (Test-Path -LiteralPath $PositionPath) {
 function Read-TokenState {
     if ($DemoLevel -ge 0.0) {
         $demoNormalized = [Math]::Min(1.0, [Math]::Max(0.0, $(if ($DemoLevel -gt 1.0) { $DemoLevel / 100.0 } else { $DemoLevel })))
+        $demoTokens = [long][Math]::Round(200000.0 * $demoNormalized)
+        $demoReset = [DateTimeOffset]::UtcNow.AddHours(2.4).ToUnixTimeSeconds()
         $script:State = [pscustomobject]@{
             level = $demoNormalized
-            tokens = [long][Math]::Round(200000.0 * $demoNormalized)
+            tokens = $demoTokens
             active = $true
             stage = Get-Stage $demoNormalized
+            project_root = ""
+            project_name = ""
+            breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; total_output_tokens = 4200L; fresh_input_tokens = [long][Math]::Round($demoTokens * 0.12); cache_creation_input_tokens = [long][Math]::Round($demoTokens * 0.18); cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
+            rate_limits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = 61.0; resets_at = $demoReset }; seven_day = [pscustomobject]@{ used_percentage = 34.0; resets_at = [DateTimeOffset]::UtcNow.AddDays(3).ToUnixTimeSeconds() } }
         }
         return
     }
     if (-not (Test-Path -LiteralPath $StatePath)) {
         if ($Demo) {
-            $script:State = [pscustomobject]@{ level = 0.95; tokens = 190000L; active = $true; stage = "QUASAR" }
+            $script:DemoLevel = 0.95
+            Read-TokenState
         }
         return
     }
@@ -369,11 +457,17 @@ function Read-TokenState {
     if ($item.LastWriteTimeUtc -eq $script:LastStateWrite) { return }
     try {
         $value = [IO.File]::ReadAllText($StatePath) | ConvertFrom-Json
+        $breakdown = if ($value.breakdown) { $value.breakdown } else { $script:EmptyBreakdown }
+        $rateLimits = if ($value.rate_limits) { $value.rate_limits } else { $script:EmptyRateLimits }
         $script:State = [pscustomobject]@{
             level = [Math]::Min(1.0, [Math]::Max(0.0, [double]$value.level))
             tokens = [Math]::Max(0L, [long]$value.tokens)
             active = [bool]$value.active
             stage = [string]$value.stage
+            project_root = [string]$value.project_root
+            project_name = [string]$value.project_name
+            breakdown = $breakdown
+            rate_limits = $rateLimits
         }
         $script:LastStateWrite = $item.LastWriteTimeUtc
     }
@@ -396,7 +490,7 @@ function Get-IdeWindow {
     [void][TokenStarNative]::GetWindowThreadProcessId($handle, [ref]$processId)
     try { $process = Get-Process -Id $processId -ErrorAction Stop }
     catch { $script:CachedHostWindow = $null; return $null }
-    $allowed = @("pycharm64", "pycharm", "idea64", "idea", "webstorm64", "rider64", "code", "cursor", "devenv", "eclipse")
+    $allowed = @("pycharm64", "pycharm", "idea64", "idea", "webstorm64", "webstorm", "rider64", "rider", "clion64", "clion", "goland64", "goland", "phpstorm64", "phpstorm", "rubymine64", "rubymine", "datagrip64", "datagrip", "studio64", "studio", "code", "cursor", "devenv", "eclipse")
     if (-not $Demo -and $allowed -notcontains $process.ProcessName.ToLowerInvariant()) {
         $script:CachedHostWindow = $null
         return $null
@@ -408,8 +502,18 @@ function Get-IdeWindow {
     }
     $dpi = [TokenStarNative]::GetDpiForWindow($handle)
     if ($dpi -le 0) { $dpi = 96 }
-    $script:CachedHostWindow = [pscustomobject]@{ Handle = $handle; Rect = $rect; Scale = $dpi / 96.0 }
+    $titleLength = [TokenStarNative]::GetWindowTextLength($handle)
+    $titleBuffer = New-Object System.Text.StringBuilder([Math]::Max(1, $titleLength + 1))
+    [void][TokenStarNative]::GetWindowText($handle, $titleBuffer, $titleBuffer.Capacity)
+    $script:CachedHostWindow = [pscustomobject]@{ Handle = $handle; Rect = $rect; Scale = $dpi / 96.0; Title = $titleBuffer.ToString() }
     return $script:CachedHostWindow
+}
+
+function Test-ProjectWindow($HostWindow) {
+    $projectName = [string]$State.project_name
+    if ([string]::IsNullOrWhiteSpace($projectName)) { return $true }
+    if ($null -eq $HostWindow -or [string]::IsNullOrWhiteSpace([string]$HostWindow.Title)) { return $false }
+    return ([string]$HostWindow.Title).IndexOf($projectName, [StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
 function Get-OverlayScale([double]$Fallback) {
@@ -464,26 +568,35 @@ function Save-WindowPosition {
 $OverlayHandle = [IntPtr]::Zero
 $DragHandleActive = $false
 $ClickThroughEnabled = $true
+$DetailsOpen = $false
+$DownArrow = [string][char]0x25BC
+$UpArrow = [string][char]0x25B2
 $DefaultPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#CC5F91BF"))
 $HoverPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FFFFFFFF"))
+
+function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
+    $left = [Windows.Controls.Canvas]::GetLeft($Element)
+    $top = [Windows.Controls.Canvas]::GetTop($Element)
+    $width = [Math]::Max($Element.ActualWidth, $Element.Width)
+    $height = [Math]::Max($Element.ActualHeight, $Element.Height)
+    return $Point.X -ge ($left - $Padding) -and $Point.X -le ($left + $width + $Padding) -and
+           $Point.Y -ge ($top - $Padding) -and $Point.Y -le ($top + $height + $Padding)
+}
 
 function Update-HitTestMode {
     if ($script:OverlayHandle -eq [IntPtr]::Zero) { return }
     $point = New-Object TokenStarNative+POINT
-    $overHandle = $false
+    $overStar = $false
+    $overPanel = $false
     if ($Window.Opacity -gt 0.01 -and [TokenStarNative]::GetCursorPos([ref]$point)) {
         $local = $Window.PointFromScreen((New-Object Windows.Point($point.X, $point.Y)))
-        $left = [Windows.Controls.Canvas]::GetLeft($MassPanel)
-        $top = [Windows.Controls.Canvas]::GetTop($MassPanel)
-        $width = [Math]::Max($MassPanel.ActualWidth, $MassPanel.Width)
-        $height = [Math]::Max($MassPanel.ActualHeight, 30.0)
-        $overHandle = $local.X -ge ($left - 7) -and $local.X -le ($left + $width + 7) -and
-                      $local.Y -ge ($top - 7) -and $local.Y -le ($top + $height + 7)
+        $overStar = Test-PointOverElement $local $DragHandle 7.0
+        $overPanel = Test-PointOverElement $local $MassPanel 7.0
     }
 
-    $script:DragHandleActive = $overHandle
-    $MassPanel.BorderBrush = if ($overHandle) { $HoverPanelBorder } else { $DefaultPanelBorder }
-    $shouldClickThrough = -not $overHandle
+    $script:DragHandleActive = $overStar
+    $MassPanel.BorderBrush = if ($overPanel) { $HoverPanelBorder } else { $DefaultPanelBorder }
+    $shouldClickThrough = -not ($overStar -or $overPanel)
     if ($shouldClickThrough -ne $script:ClickThroughEnabled) {
         $GWL_EXSTYLE = -20
         $WS_EX_TRANSPARENT = 0x20
@@ -496,7 +609,7 @@ function Update-HitTestMode {
     }
 }
 
-$MassPanel.Add_PreviewMouseLeftButtonDown({
+$DragHandle.Add_PreviewMouseLeftButtonDown({
     if ($_.ChangedButton -eq [Windows.Input.MouseButton]::Left) {
         try { $Window.DragMove() }
         finally {
@@ -509,8 +622,23 @@ $MassPanel.Add_PreviewMouseLeftButtonDown({
     }
 })
 
+$DetailsButton.Add_Click({
+    $script:DetailsOpen = -not $script:DetailsOpen
+    $DetailsButton.Content = if ($script:DetailsOpen) { $script:UpArrow } else { $script:DownArrow }
+    $DetailsPanel.Visibility = if ($script:DetailsOpen) { "Visible" } else { "Collapsed" }
+    $DetailsPanel.Opacity = if ($script:DetailsOpen) { 1.0 } else { 0.0 }
+    if ($script:LastHostWindow -and $script:LastHostWindow.Handle) {
+        [void][TokenStarNative]::SetForegroundWindow($script:LastHostWindow.Handle)
+    }
+    $_.Handled = $true
+})
+
 $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
 function Update-Visual {
+    if (-not $SelfTest -and (Test-Path -LiteralPath $StopPath)) {
+        $Window.Close()
+        return
+    }
     $time = $Stopwatch.Elapsed.TotalSeconds
     if ($time -ge $script:NextStatePoll) {
         Read-TokenState
@@ -519,9 +647,11 @@ function Update-Visual {
     $level = [double]$State.level
     $stage = if ($State.stage) { [string]$State.stage } else { Get-Stage $level }
 
-    $hostWindow = if ($SelfTest) { [pscustomobject]@{ Rect = $null; Scale = 1.0 } } else { Get-IdeWindow }
-    $visible = [bool]$State.active -and $null -ne $hostWindow
+    $hostWindow = if ($SelfTest) { [pscustomobject]@{ Rect = $null; Scale = 1.0; Title = "" } } else { Get-IdeWindow }
+    $visible = [bool]$State.active -and $null -ne $hostWindow -and (Test-ProjectWindow $hostWindow)
     $Window.Opacity = if ($visible -or $SelfTest) { 1.0 } else { 0.0 }
+    $DragHandle.IsHitTestVisible = $visible -or $SelfTest
+    $MassPanel.IsHitTestVisible = $visible -or $SelfTest
     if ($script:Timer) {
         $targetInterval = if ($visible) { 80 } else { 250 }
         if ($script:Timer.Interval.TotalMilliseconds -ne $targetInterval) {
@@ -551,6 +681,7 @@ function Update-Visual {
         "NEUTRON STAR" { 28.0 }
         default { 92.0 }
     }
+    Set-CenteredSize $DragHandle ([Math]::Max(42.0, $diameter)) ([Math]::Max(42.0, $diameter))
     $colors = switch ($stage) {
         "RED DWARF" { @("#FFFF5A21", "#00A51005") }
         "MAIN SEQUENCE" { @("#FFFFD36B", "#00FF6A10") }
@@ -705,17 +836,28 @@ function Update-Visual {
     }
 
     $massLabel = "MASS $(Format-Mass ([long]$State.tokens))"
-    $massLayoutKey = "$massLabel|$stage"
+    $rateSummary = Get-RateSummary
+    $detailsContent = Get-DetailsText
+    if ($detailsContent -ne $script:LastDetailsText) {
+        $script:LastDetailsText = $detailsContent
+        $DetailsText.Text = $detailsContent
+    }
+    $massLayoutKey = "$massLabel|$stage|$rateSummary"
     if ($massLayoutKey -ne $script:LastMassLayoutKey) {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
+        $RateText.Text = " | $rateSummary"
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
         $panelWidth = [Math]::Max(112.0, $MassPanel.DesiredSize.Width)
         $MassPanel.Width = $panelWidth
-        [Windows.Controls.Canvas]::SetLeft($MassPanel, $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 145 } else { 0 }))
-        [Windows.Controls.Canvas]::SetTop($MassPanel, $CenterY + [Math]::Max(58.0, $diameter * 0.70))
+        $panelLeft = $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 100 } else { 0 })
+        $panelTop = $CenterY + [Math]::Max(58.0, $diameter * 0.70)
+        [Windows.Controls.Canvas]::SetLeft($MassPanel, $panelLeft)
+        [Windows.Controls.Canvas]::SetTop($MassPanel, $panelTop)
+        [Windows.Controls.Canvas]::SetLeft($DetailsPanel, [Math]::Max(4.0, [Math]::Min($Window.Width - $DetailsPanel.Width - 4.0, $panelLeft + $panelWidth - $DetailsPanel.Width)))
+        [Windows.Controls.Canvas]::SetTop($DetailsPanel, $panelTop + 38.0)
     }
-    $MassPanel.Opacity = if ($State.active) { 1.0 } else { 0.0 }
+    $MassPanel.Opacity = if ($visible -or $SelfTest) { 1.0 } else { 0.0 }
 }
 
 $Window.Add_SourceInitialized({
@@ -749,6 +891,13 @@ $Window.Add_SourceInitialized({
 Read-TokenState
 Update-Visual
 if ($SelfTest) {
+    $State.project_name = "ScopedProject"
+    if (-not (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - ScopedProject - PyCharm" }))) {
+        throw "Token Star overlay project-title match self-test failed."
+    }
+    if (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - OtherProject - PyCharm" })) {
+        throw "Token Star overlay project-title isolation self-test failed."
+    }
     Write-Output "Token Star overlay self-test OK"
     if ($CreatedNew) { $OverlayMutex.ReleaseMutex() }
     $OverlayMutex.Dispose()
@@ -765,6 +914,15 @@ $Timer.Add_Tick({ Update-Visual; Update-HitTestMode })
 $Timer.Start()
 try { [void]$Window.ShowDialog() }
 finally {
+    try {
+        if (Test-Path -LiteralPath $PidPath) {
+            $pidRecord = [IO.File]::ReadAllText($PidPath) | ConvertFrom-Json
+            if ([int]$pidRecord.pid -eq $PID) { Remove-Item -LiteralPath $PidPath -Force }
+        }
+    }
+    catch { }
+    Remove-Item -LiteralPath ($PidPath + ".tmp") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $StopPath -Force -ErrorAction SilentlyContinue
     if ($CreatedNew) { $OverlayMutex.ReleaseMutex() }
     $OverlayMutex.Dispose()
 }

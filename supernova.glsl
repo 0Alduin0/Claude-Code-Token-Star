@@ -138,7 +138,7 @@ vec2 massLabel(vec2 px, vec2 centerPx, float massK, float radiusPx, float vertic
     float size = clamp(iResolution.y / 250.0, 2.80, 4.60);
     int mass = int(clamp(floor(massK + 0.5), 0.0, 4095.0));
     int digitCount = mass >= 1000 ? 4 : (mass >= 100 ? 3 : (mass >= 10 ? 2 : 1));
-    float widthCells = 20.0 + 4.0 * float(digitCount);
+    float widthCells = 17.0 + 4.0 * float(digitCount);
     float labelGap = radiusPx + 16.0 + 1.0 * sin(iTime * 0.7);
     float originY = verticalSide > 0.0
         ? centerPx.y + labelGap
@@ -159,8 +159,6 @@ vec2 massLabel(vec2 px, vec2 centerPx, float massK, float radiusPx, float vertic
     if (digitCount >= 3) { ink += putGlyph(px, origin, size, column, d1); column += 4.0; }
     if (digitCount >= 2) { ink += putGlyph(px, origin, size, column, d2); column += 4.0; }
     ink += putGlyph(px, origin, size, column, d3);
-    column += 4.0;
-    ink += putGlyph(px, origin, size, column, 13);
 
     vec2 panelCenter = origin + vec2(widthCells * size * 0.5, 2.5 * size);
     vec2 panelHalf = vec2(widthCells * size * 0.5 + 6.0, 2.5 * size + 5.0);

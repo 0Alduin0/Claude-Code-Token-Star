@@ -108,9 +108,59 @@ function Remove-HookCommands {
     if (@($hooks.PSObject.Properties).Count -eq 0) { $Settings.PSObject.Properties.Remove("hooks") }
 }
 
+function Get-VerifiedOverlayProcess {
+    param([string]$PidPath)
+    if (-not (Test-Path -LiteralPath $PidPath)) { return $null }
+    try {
+        $record = [System.IO.File]::ReadAllText($PidPath) | ConvertFrom-Json
+        $process = Get-Process -Id ([int]$record.pid) -ErrorAction Stop
+        $expectedStart = [DateTime]::Parse(
+            [string]$record.started_utc,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind
+        ).ToUniversalTime()
+        if ([Math]::Abs(($process.StartTime.ToUniversalTime() - $expectedStart).TotalSeconds) -le 1.0) {
+            return $process
+        }
+    }
+    catch { }
+    return $null
+}
+
+function Stop-InstalledOverlay {
+    param([string]$RuntimePath)
+    $pidPath = Join-Path $RuntimePath "token-star-overlay.pid.json"
+    $stopPath = Join-Path $RuntimePath "token-star-overlay.stop"
+    $overlayPath = Join-Path $RuntimePath "token-star-overlay.ps1"
+    $process = Get-VerifiedOverlayProcess $pidPath
+    if ($process) {
+        [System.IO.File]::WriteAllText($stopPath, "stop`n", $Utf8NoBom)
+        foreach ($attempt in 1..30) {
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) { break }
+            Start-Sleep -Milliseconds 100
+        }
+        if (Get-Process -Id $process.Id -ErrorAction SilentlyContinue) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+        return
+    }
+
+    # Upgrade compatibility for overlays installed before PID records existed.
+    foreach ($legacy in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        if ($legacy.Name -in @("powershell.exe", "pwsh.exe") -and $legacy.CommandLine -and
+            $legacy.CommandLine.IndexOf($overlayPath, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            Stop-Process -Id $legacy.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $TerminalSettings = Find-TerminalSettings
 $ClaudeSettings = [System.IO.Path]::GetFullPath($ClaudeSettings)
 $RuntimeRoot = [System.IO.Path]::GetFullPath($RuntimeRoot)
+$ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
+if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
+    throw "Project directory was not found: $ProjectPath"
+}
 
 if (-not $SkipVersionCheck) {
     $terminalPackage = Get-AppxPackage Microsoft.WindowsTerminal -ErrorAction SilentlyContinue |
@@ -120,10 +170,21 @@ if (-not $SkipVersionCheck) {
     }
 }
 
+Stop-InstalledOverlay $RuntimeRoot
 [System.IO.Directory]::CreateDirectory($RuntimeRoot) | Out-Null
 foreach ($name in @("token-mass-windows.ps1", "token-star-overlay.ps1", "supernova-windows.hlsl")) {
     Copy-Item -LiteralPath (Join-Path $ScriptRoot $name) -Destination (Join-Path $RuntimeRoot $name) -Force
 }
+[System.IO.File]::WriteAllText(
+    (Join-Path $RuntimeRoot "project-scope.json"),
+    ([ordered]@{
+        schema = 1
+        root = $ProjectPath
+        name = (Get-Item -LiteralPath $ProjectPath).Name
+    } | ConvertTo-Json) + "`n",
+    $Utf8NoBom
+)
+[System.IO.File]::WriteAllText((Join-Path $RuntimeRoot "overlay.enabled"), "enabled`n", $Utf8NoBom)
 
 $generatedShader = Join-Path $RuntimeRoot "supernova-windows.generated.hlsl"
 $profile = [ordered]@{
@@ -187,6 +248,8 @@ Set-ObjectProperty $state "claude_settings" $ClaudeSettings
 Set-ObjectProperty $state "terminal_settings" $TerminalSettings
 Set-ObjectProperty $state "runtime_root" $RuntimeRoot
 Set-ObjectProperty $state "overlay" $overlay
+Set-ObjectProperty $state "project_path" $ProjectPath
+Set-ObjectProperty $state "overlay_enabled" $true
 
 Remove-HookCommands $settings $commandsToReplace
 Set-ObjectProperty $settings "statusLine" ([pscustomobject]@{ type = "command"; command = $command })
@@ -231,7 +294,7 @@ $oldOverride = $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS
 try {
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
     & $bridge -Off | Out-Null
-    & $bridge -Doctor
+    & $bridge -Doctor -SkipTerminalCheck:($SkipVersionCheck -or -not $TerminalSettings)
     if ($LASTEXITCODE -ne 0) { throw "Windows bridge doctor failed." }
 }
 finally {
@@ -247,25 +310,19 @@ if (-not $TerminalSettings) {
     Write-Output "Windows Terminal not found; skipped reload integration. The IDE overlay is fully available."
 }
 if (-not $NoLaunch) {
-    $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
-    if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
-        throw "Project directory was not found: $ProjectPath"
-    }
     if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
         throw "Claude Code command ('claude') was not found in PATH."
     }
 
-    $overlayRunning = $false
-    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue)) {
-        if ($process.CommandLine -and $process.CommandLine.IndexOf($overlay, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            $overlayRunning = $true
-            break
-        }
-    }
-    if (-not $overlayRunning) {
-        Start-Process powershell.exe `
-            -ArgumentList @("-NoLogo", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", "`"$overlay`"") `
-            -WindowStyle Hidden | Out-Null
+    if ($env:GHOSTTY_SUPERNOVA_DISABLE_OVERLAY -ne "1" -and -not (Get-VerifiedOverlayProcess (Join-Path $RuntimeRoot "token-star-overlay.pid.json"))) {
+        Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList @(
+            "-NoLogo", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass",
+            "-File", ('"' + $overlay + '"'),
+            "-StatePath", ('"' + (Join-Path $RuntimeRoot "token-state.json") + '"'),
+            "-PidPath", ('"' + (Join-Path $RuntimeRoot "token-star-overlay.pid.json") + '"'),
+            "-StopPath", ('"' + (Join-Path $RuntimeRoot "token-star-overlay.stop") + '"'),
+            "-PositionPath", ('"' + (Join-Path $RuntimeRoot "overlay-position.json") + '"')
+        ) | Out-Null
     }
 
     Write-Output "Overlay is running. Starting Claude in this terminal: $ProjectPath"

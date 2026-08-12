@@ -59,11 +59,17 @@ Installation starts the overlay invisibly in the background, then starts
 `claude` directly in the terminal where `install` was entered. In PyCharm this
 means Claude stays in PyCharm's terminal and the star appears over the PyCharm
 window. The overlay is click-through, does not steal focus, and hides when a
-supported IDE is not the foreground window.
+supported IDE is not the foreground window. The install records that project
+root: opening a different PyCharm/IDE project does not show this project's
+star or status line.
 
-Move it by dragging the `MASS ... MOVE` label. The rest of the visual remains
+Move it by dragging the star itself. The rest of the visual remains
 click-through, the complete effect is clamped inside the IDE window, and its
-position is remembered for the next launch.
+position is remembered for the next launch. The compact row shows mass without
+the old `K`/`MC` suffix (for example `MASS 85`), followed by five-hour usage and
+time until reset. Select its arrow to expand a `/context`-style breakdown of
+fresh input, cache creation, cache reads, output, remaining context, and rate
+limits. Fields unavailable in Claude's status payload are shown as `--`.
 
 The overlay uses adaptive rendering: animation work stops while the IDE is not
 foreground, token-file polling and foreground inspection are throttled, and
@@ -71,10 +77,11 @@ brushes are reused rather than allocated every frame. The Quasar disk is split
 into back and front layers so its near side visibly crosses in front of the
 black core.
 
-Supported foreground processes are PyCharm, IntelliJ IDEA, WebStorm, Rider,
-VS Code, Cursor, Visual Studio, and Eclipse. The overlay restarts itself when a
-Claude status-line update arrives, so it also comes back automatically after a
-reboot when Claude is next used.
+Supported foreground processes are PyCharm, IntelliJ IDEA, Android Studio,
+WebStorm, Rider, CLion, GoLand, PhpStorm, RubyMine, DataGrip, VS Code, Cursor,
+Visual Studio, and Eclipse. The overlay restarts itself when a Claude
+status-line update arrives, so it also comes back automatically after a reboot
+when Claude is next used.
 
 The longer equivalent command is:
 
@@ -89,8 +96,9 @@ The installer:
 2. Connects Claude Code's `statusLine`, `SessionStart`, and `SessionEnd` events.
 3. Preserves unrelated Claude settings and hooks.
 4. Backs up a replaced status line for uninstall.
-5. Starts Claude in the current IDE terminal.
-6. Is idempotent: running it again does not duplicate hooks or profiles.
+5. Stores the current project root and isolates updates/visibility to it.
+6. Starts Claude in the current IDE terminal.
+7. Is idempotent: running it again does not duplicate hooks or profiles.
 
 If Windows Terminal 1.24+ is installed, the installer also creates an optional
 `Claude Supernova` HLSL profile. It is not opened automatically. To use that
@@ -140,7 +148,7 @@ defines through a controlled reload channel:
 
 ```text
 Claude Code status-line JSON
-        | used_percentage + total_input_tokens + context_window_size
+        | context usage + token breakdown + rate limits
         v
 token-mass-windows.ps1
         +--> token-state.json --> transparent IDE overlay
@@ -224,8 +232,11 @@ Both bridges read these official fields from `context_window`:
 - `context_window_size`
 
 On older or partial payloads they can derive input usage from `current_usage`
-by summing fresh input, cache creation, and cache reads. Output tokens are not
-included. Missing or temporarily null values safely fall back to zero.
+by summing fresh input, cache creation, and cache reads. Output tokens do not
+increase the star's mass, but the Windows detail panel displays them when
+available. The Windows bridge also forwards five-hour and seven-day rate-limit
+fields when Claude supplies them. Missing or temporarily null values safely
+fall back to zero or `--`.
 
 Lifecycle behavior:
 
@@ -274,9 +285,10 @@ npm run test:hlsl
 
 The suites cover token fallbacks, stage boundaries, exact OSC packets,
 malformed input, lifecycle events, Windows Terminal fragment installation,
-HLSL state generation, safe reload signaling, idempotent installation,
-uninstall restoration, Windows `CONOUT$`, Unix `/dev/tty`, and ancestor-TTY
-fallback. GitHub Actions runs Linux, Windows, GLSL, and HLSL jobs.
+HLSL state generation, project isolation, token/rate-limit details, safe reload
+signaling, idempotent installation, uninstall restoration, Windows `CONOUT$`,
+Unix `/dev/tty`, and ancestor-TTY fallback. GitHub Actions runs Linux, Windows,
+GLSL, and HLSL jobs.
 
 ## Troubleshooting
 

@@ -240,7 +240,7 @@
       const level = Number(slider.value) / 100;
       const tokens = Math.round(level * 200000);
       stageOut.textContent = `${Math.round(level*100)}% · ${stageName(level)}`;
-      massOut.textContent = `MASS ${Math.round(tokens/1000)}K TOKENS`;
+      massOut.textContent = `MASS ${Math.round(tokens/1000)}`;
       stageButtons.forEach(button => button.classList.toggle(
         'active', stageName(Number(button.dataset.level) / 100) === stageName(level)
       ));

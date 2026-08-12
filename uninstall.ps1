@@ -66,6 +66,25 @@ function Remove-HookCommands {
     if (@($hooks.PSObject.Properties).Count -eq 0) { $Settings.PSObject.Properties.Remove("hooks") }
 }
 
+function Get-VerifiedOverlayProcess {
+    param([string]$PidPath)
+    if (-not (Test-Path -LiteralPath $PidPath)) { return $null }
+    try {
+        $record = [System.IO.File]::ReadAllText($PidPath) | ConvertFrom-Json
+        $process = Get-Process -Id ([int]$record.pid) -ErrorAction Stop
+        $expectedStart = [DateTime]::Parse(
+            [string]$record.started_utc,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind
+        ).ToUniversalTime()
+        if ([Math]::Abs(($process.StartTime.ToUniversalTime() - $expectedStart).TotalSeconds) -le 1.0) {
+            return $process
+        }
+    }
+    catch { }
+    return $null
+}
+
 $state = Read-JsonObject $statePath
 if (@($state.PSObject.Properties).Count -eq 0) {
     Write-Output "Ghostty Supernova for Windows Terminal is not installed."
@@ -98,6 +117,8 @@ else { $null }
 if ($runtimeRoot) {
     $bridge = Join-Path $runtimeRoot "token-mass-windows.ps1"
     $overlay = Join-Path $runtimeRoot "token-star-overlay.ps1"
+    $overlayPid = Join-Path $runtimeRoot "token-star-overlay.pid.json"
+    $overlayStop = Join-Path $runtimeRoot "token-star-overlay.stop"
     if (Test-Path -LiteralPath $bridge) {
         $oldOverride = $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS
         try {
@@ -107,10 +128,24 @@ if ($runtimeRoot) {
         finally { $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $oldOverride }
     }
 
-    foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
-        if ($process.Name -in @("powershell.exe", "pwsh.exe") -and $process.CommandLine -and
-            $process.CommandLine.IndexOf($overlay, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    $overlayProcess = Get-VerifiedOverlayProcess $overlayPid
+    if ($overlayProcess) {
+        [System.IO.File]::WriteAllText($overlayStop, "stop`n", $Utf8NoBom)
+        foreach ($attempt in 1..30) {
+            if (-not (Get-Process -Id $overlayProcess.Id -ErrorAction SilentlyContinue)) { break }
+            Start-Sleep -Milliseconds 100
+        }
+        if (Get-Process -Id $overlayProcess.Id -ErrorAction SilentlyContinue) {
+            Stop-Process -Id $overlayProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+    else {
+        # Upgrade compatibility for overlays installed before PID records existed.
+        foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+            if ($process.Name -in @("powershell.exe", "pwsh.exe") -and $process.CommandLine -and
+                $process.CommandLine.IndexOf($overlay, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 
@@ -123,12 +158,18 @@ if ($runtimeRoot) {
         "token-star-overlay.ps1",
         "token-state.json",
         "token-state.json.tmp",
+        "token-star-overlay.pid.json",
+        "token-star-overlay.stop",
         "overlay-position.json",
-        "overlay-position.json.tmp"
+        "overlay-position.json.tmp",
+        "overlay.enabled",
+        "project-scope.json"
     )) {
         $path = Join-Path $runtimeRoot $name
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
     }
+    Get-ChildItem -LiteralPath $runtimeRoot -Filter "token-state.json.*.tmp" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $runtimeRoot) -and
         (Get-ChildItem -LiteralPath $runtimeRoot -Force | Measure-Object).Count -eq 0) {
         Remove-Item -LiteralPath $runtimeRoot -Force
