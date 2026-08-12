@@ -635,39 +635,75 @@ function Get-OverlayScale([double]$Fallback) {
     return 1.0
 }
 
-function Set-WindowPosition($HostWindow) {
-    if (-not $HostWindow -or -not $HostWindow.Rect) { return }
+function Get-PlacementInset {
+    switch ([string]$State.stage) {
+        "RED DWARF" { return 38.0 }
+        "MAIN SEQUENCE" { return 50.0 }
+        "BLUE GIANT" { return 64.0 }
+        "HYPERGIANT" { return 78.0 }
+        "NEUTRON STAR" { return 38.0 }
+        default { return 52.0 }
+    }
+}
+
+function Get-WindowTravelBounds($HostWindow) {
     $scale = Get-OverlayScale ([double]$HostWindow.Scale)
     $margin = 4.0
     $left = $HostWindow.Rect.Left / $scale + $margin
     $top = $HostWindow.Rect.Top / $scale + $margin
     $right = $HostWindow.Rect.Right / $scale - $margin
     $bottom = $HostWindow.Rect.Bottom / $scale - $margin
-    $availableX = [Math]::Max(0.0, $right - $left - $Window.Width)
-    $availableY = [Math]::Max(0.0, $bottom - $top - $Window.Height)
-    $Window.Left = $left + $availableX * [double]$OverlayPosition.x
-    $Window.Top = $top + $availableY * [double]$OverlayPosition.y
+    $inset = Get-PlacementInset
+    $minLeft = $left + $inset - $CenterX
+    $maxLeft = [Math]::Max($minLeft, $right - $inset - $CenterX)
+    $minTop = $top + $inset - $CenterY
+    $maxTop = [Math]::Max($minTop, $bottom - $inset - $CenterY)
+    return [pscustomobject]@{
+        MinLeft = $minLeft
+        MaxLeft = $maxLeft
+        MinTop = $minTop
+        MaxTop = $maxTop
+        Width = $maxLeft - $minLeft
+        Height = $maxTop - $minTop
+        HostLeft = $left
+        HostTop = $top
+        HostRight = $right
+        HostBottom = $bottom
+    }
+}
+
+function Update-RootClip($Bounds) {
+    $clipLeft = [Math]::Max(0.0, $Bounds.HostLeft - $Window.Left)
+    $clipTop = [Math]::Max(0.0, $Bounds.HostTop - $Window.Top)
+    $clipRight = [Math]::Min($Window.Width, $Bounds.HostRight - $Window.Left)
+    $clipBottom = [Math]::Min($Window.Height, $Bounds.HostBottom - $Window.Top)
+    $clipWidth = [Math]::Max(0.0, $clipRight - $clipLeft)
+    $clipHeight = [Math]::Max(0.0, $clipBottom - $clipTop)
+    $clipRect = New-Object Windows.Rect($clipLeft, $clipTop, $clipWidth, $clipHeight)
+    $Root.Clip = New-Object Windows.Media.RectangleGeometry($clipRect)
+}
+
+function Set-WindowPosition($HostWindow) {
+    if (-not $HostWindow -or -not $HostWindow.Rect) { return }
+    $bounds = Get-WindowTravelBounds $HostWindow
+    $Window.Left = $bounds.MinLeft + $bounds.Width * [double]$OverlayPosition.x
+    $Window.Top = $bounds.MinTop + $bounds.Height * [double]$OverlayPosition.y
+    Update-RootClip $bounds
 }
 
 function Save-WindowPosition {
     $hostWindow = if ($script:LastHostWindow) { $script:LastHostWindow } else { Get-IdeWindow }
     if (-not $hostWindow -or -not $hostWindow.Rect) { return }
-    $scale = Get-OverlayScale ([double]$hostWindow.Scale)
-    $margin = 4.0
-    $left = $hostWindow.Rect.Left / $scale + $margin
-    $top = $hostWindow.Rect.Top / $scale + $margin
-    $right = $hostWindow.Rect.Right / $scale - $margin
-    $bottom = $hostWindow.Rect.Bottom / $scale - $margin
-    $availableX = [Math]::Max(0.0, $right - $left - $Window.Width)
-    $availableY = [Math]::Max(0.0, $bottom - $top - $Window.Height)
-    $clampedLeft = [Math]::Min($left + $availableX, [Math]::Max($left, $Window.Left))
-    $clampedTop = [Math]::Min($top + $availableY, [Math]::Max($top, $Window.Top))
+    $bounds = Get-WindowTravelBounds $hostWindow
+    $clampedLeft = [Math]::Min($bounds.MaxLeft, [Math]::Max($bounds.MinLeft, $Window.Left))
+    $clampedTop = [Math]::Min($bounds.MaxTop, [Math]::Max($bounds.MinTop, $Window.Top))
     $Window.Left = $clampedLeft
     $Window.Top = $clampedTop
     $script:OverlayPosition = [pscustomobject]@{
-        x = if ($availableX -gt 0) { ($clampedLeft - $left) / $availableX } else { 0.0 }
-        y = if ($availableY -gt 0) { ($clampedTop - $top) / $availableY } else { 0.0 }
+        x = if ($bounds.Width -gt 0) { ($clampedLeft - $bounds.MinLeft) / $bounds.Width } else { 0.0 }
+        y = if ($bounds.Height -gt 0) { ($clampedTop - $bounds.MinTop) / $bounds.Height } else { 0.0 }
     }
+    Update-RootClip $bounds
     $json = ($script:OverlayPosition | ConvertTo-Json -Compress) + "`n"
     $temporary = $PositionPath + ".tmp"
     [IO.File]::WriteAllText($temporary, $json, (New-Object Text.UTF8Encoding($false)))
@@ -688,8 +724,16 @@ $HoverPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF
 function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
     $left = [Windows.Controls.Canvas]::GetLeft($Element)
     $top = [Windows.Controls.Canvas]::GetTop($Element)
-    $width = [Math]::Max($Element.ActualWidth, $Element.Width)
-    $height = [Math]::Max($Element.ActualHeight, $Element.Height)
+    if ([double]::IsNaN($left)) { $left = 0.0 }
+    if ([double]::IsNaN($top)) { $top = 0.0 }
+    $width = [double]$Element.ActualWidth
+    $height = [double]$Element.ActualHeight
+    if ($width -le 0.0 -or [double]::IsNaN($width)) { $width = [double]$Element.DesiredSize.Width }
+    if ($height -le 0.0 -or [double]::IsNaN($height)) { $height = [double]$Element.DesiredSize.Height }
+    $explicitWidth = [double]$Element.Width
+    $explicitHeight = [double]$Element.Height
+    if (-not [double]::IsNaN($explicitWidth)) { $width = [Math]::Max($width, $explicitWidth) }
+    if (-not [double]::IsNaN($explicitHeight)) { $height = [Math]::Max($height, $explicitHeight) }
     return $Point.X -ge ($left - $Padding) -and $Point.X -le ($left + $width + $Padding) -and
            $Point.Y -ge ($top - $Padding) -and $Point.Y -le ($top + $height + $Padding)
 }
@@ -700,6 +744,11 @@ function Get-CursorHitRegion {
         return [pscustomobject]@{ OverStar = $false; OverPanel = $false }
     }
     try {
+        if ($script:LastHostWindow -and $script:LastHostWindow.Rect -and
+            ($point.X -lt $script:LastHostWindow.Rect.Left -or $point.X -gt $script:LastHostWindow.Rect.Right -or
+             $point.Y -lt $script:LastHostWindow.Rect.Top -or $point.Y -gt $script:LastHostWindow.Rect.Bottom)) {
+            return [pscustomobject]@{ OverStar = $false; OverPanel = $false }
+        }
         $local = $Window.PointFromScreen((New-Object Windows.Point($point.X, $point.Y)))
         return [pscustomobject]@{
             OverStar = Test-PointOverElement $local $DragHandle 7.0
@@ -1117,6 +1166,20 @@ if ($SelfTest) {
     }
     if (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - OtherProject - PyCharm" })) {
         throw "Token Star overlay project-title isolation self-test failed."
+    }
+    $panelLeft = [Windows.Controls.Canvas]::GetLeft($MassPanel)
+    $panelTop = [Windows.Controls.Canvas]::GetTop($MassPanel)
+    $panelPointX = $panelLeft + $MassPanel.DesiredSize.Width / 2.0
+    $panelPointY = $panelTop + $MassPanel.DesiredSize.Height / 2.0
+    $panelPoint = New-Object Windows.Point($panelPointX, $panelPointY)
+    if (-not (Test-PointOverElement $panelPoint $MassPanel 0.0)) {
+        throw "Token Star overlay auto-sized panel hit-test self-test failed."
+    }
+    $travelRect = New-Object TokenStarNative+RECT
+    $travelRect.Left = 0; $travelRect.Top = 0; $travelRect.Right = 1200; $travelRect.Bottom = 800
+    $travelBounds = Get-WindowTravelBounds ([pscustomobject]@{ Rect = $travelRect; Scale = 1.0 })
+    if ($travelBounds.Width -lt 900.0 -or $travelBounds.Height -lt 600.0) {
+        throw "Token Star overlay expanded movement-range self-test failed."
     }
     $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
     if (-not $script:DetailsOpen -or $DetailsPanel.Visibility -ne "Visible") {
