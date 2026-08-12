@@ -263,6 +263,9 @@ public static class TokenStarNative {
                   Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
                   FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
         </Grid>
+        <Border Height="1" Background="#664C7199" Margin="0,5,0,4" />
+        <CheckBox Name="LockPositionCheckBox" Content="Lock position" Foreground="#FFE8F4FF"
+                  FontFamily="Consolas" FontSize="10" Cursor="Hand" Focusable="False" />
       </StackPanel>
     </Border>
   </Canvas>
@@ -312,6 +315,7 @@ $DetailsText = $Window.FindName("DetailsText")
 $Scale1Button = $Window.FindName("Scale1Button")
 $Scale2Button = $Window.FindName("Scale2Button")
 $Scale3Button = $Window.FindName("Scale3Button")
+$LockPositionCheckBox = $Window.FindName("LockPositionCheckBox")
 
 foreach ($visual in @(
     $Stars, $Nebula, $PulseRingOuter, $PulseRingInner, $Rays, $Particles,
@@ -556,6 +560,7 @@ $LastHostSignature = ""
 $LastMassLayoutKey = ""
 $LastDetailsText = ""
 $StarScaleLevel = 3
+$PositionLocked = $false
 $NextStatePoll = 0.0
 $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
@@ -565,13 +570,20 @@ $NextCoronaUpdate = 0.0
 if (Test-Path -LiteralPath $PositionPath) {
     try {
         $savedPosition = [IO.File]::ReadAllText($PositionPath) | ConvertFrom-Json
+        $savedX = [double]$savedPosition.x
+        $savedY = [double]$savedPosition.y
+        if ([double]::IsNaN($savedX) -or [double]::IsInfinity($savedX)) { $savedX = 0.96 }
+        if ([double]::IsNaN($savedY) -or [double]::IsInfinity($savedY)) { $savedY = 0.06 }
         $OverlayPosition = [pscustomobject]@{
-            x = [Math]::Min(1.0, [Math]::Max(0.0, [double]$savedPosition.x))
-            y = [Math]::Min(1.0, [Math]::Max(0.0, [double]$savedPosition.y))
+            x = [Math]::Min(1.0, [Math]::Max(0.0, $savedX))
+            y = [Math]::Min(1.0, [Math]::Max(0.0, $savedY))
         }
         if ($savedPosition.PSObject.Properties['scale']) {
             $savedScale = [int]$savedPosition.scale
             if ($savedScale -ge 1 -and $savedScale -le 3) { $StarScaleLevel = $savedScale }
+        }
+        if ($savedPosition.PSObject.Properties['locked']) {
+            $PositionLocked = [bool]$savedPosition.locked
         }
     }
     catch { }
@@ -656,6 +668,7 @@ function Get-IdeWindow {
     $script:CachedHostWindow = [pscustomobject]@{ Handle = $handle; Rect = $rect; Scale = $dpi / 96.0; Title = $titleBuffer.ToString() }
     return $script:CachedHostWindow
 }
+$LockPositionCheckBox.IsChecked = $PositionLocked
 
 function Test-ProjectWindow($HostWindow) {
     $projectName = [string]$State.project_name
@@ -733,18 +746,30 @@ function Set-WindowPosition($HostWindow) {
 
 function Save-WindowPosition {
     $hostWindow = if ($script:LastHostWindow) { $script:LastHostWindow } else { Get-IdeWindow }
-    if (-not $hostWindow -or -not $hostWindow.Rect) { return }
-    $bounds = Get-WindowTravelBounds $hostWindow
-    $clampedLeft = [Math]::Min($bounds.MaxLeft, [Math]::Max($bounds.MinLeft, $Window.Left))
-    $clampedTop = [Math]::Min($bounds.MaxTop, [Math]::Max($bounds.MinTop, $Window.Top))
-    $Window.Left = $clampedLeft
-    $Window.Top = $clampedTop
-    $script:OverlayPosition = [pscustomobject]@{
-        x = if ($bounds.Width -gt 0) { ($clampedLeft - $bounds.MinLeft) / $bounds.Width } else { 0.0 }
-        y = if ($bounds.Height -gt 0) { ($clampedTop - $bounds.MinTop) / $bounds.Height } else { 0.0 }
-        scale = $script:StarScaleLevel
+    $savedX = [double]$script:OverlayPosition.x
+    $savedY = [double]$script:OverlayPosition.y
+    $windowLeft = [double]$Window.Left
+    $windowTop = [double]$Window.Top
+    if ($hostWindow -and $hostWindow.Rect -and
+        -not [double]::IsNaN($windowLeft) -and -not [double]::IsInfinity($windowLeft) -and
+        -not [double]::IsNaN($windowTop) -and -not [double]::IsInfinity($windowTop)) {
+        $bounds = Get-WindowTravelBounds $hostWindow
+        $clampedLeft = [Math]::Min($bounds.MaxLeft, [Math]::Max($bounds.MinLeft, $windowLeft))
+        $clampedTop = [Math]::Min($bounds.MaxTop, [Math]::Max($bounds.MinTop, $windowTop))
+        $Window.Left = $clampedLeft
+        $Window.Top = $clampedTop
+        $savedX = if ($bounds.Width -gt 0) { ($clampedLeft - $bounds.MinLeft) / $bounds.Width } else { 0.0 }
+        $savedY = if ($bounds.Height -gt 0) { ($clampedTop - $bounds.MinTop) / $bounds.Height } else { 0.0 }
+        Update-RootClip $bounds
     }
-    Update-RootClip $bounds
+    if ([double]::IsNaN($savedX) -or [double]::IsInfinity($savedX)) { $savedX = 0.96 }
+    if ([double]::IsNaN($savedY) -or [double]::IsInfinity($savedY)) { $savedY = 0.06 }
+    $script:OverlayPosition = [pscustomobject]@{
+        x = [Math]::Min(1.0, [Math]::Max(0.0, $savedX))
+        y = [Math]::Min(1.0, [Math]::Max(0.0, $savedY))
+        scale = $script:StarScaleLevel
+        locked = $script:PositionLocked
+    }
     $json = ($script:OverlayPosition | ConvertTo-Json -Compress) + "`n"
     $temporary = $PositionPath + ".tmp"
     [IO.File]::WriteAllText($temporary, $json, (New-Object Text.UTF8Encoding($false)))
@@ -787,6 +812,13 @@ function Set-StarScale([int]$Level) {
         Set-WindowPosition $script:LastHostWindow
         Save-WindowPosition
     }
+}
+
+function Set-PositionLock([bool]$Locked, [bool]$Persist = $true) {
+    $script:PositionLocked = $Locked
+    $DragHandle.Cursor = if ($Locked) { "Arrow" } else { "SizeAll" }
+    $DragHandle.ToolTip = if ($Locked) { "Position locked. Unlock it from the details menu to move the star." } else { "Drag the token star" }
+    if ($Persist) { Save-WindowPosition }
 }
 
 Apply-StarScale
@@ -857,6 +889,10 @@ function Update-HitTestMode {
 
 $DragHandle.Add_PreviewMouseLeftButtonDown({
     if ($_.ChangedButton -eq [Windows.Input.MouseButton]::Left) {
+        if ($script:PositionLocked) {
+            $_.Handled = $true
+            return
+        }
         $script:IsDragging = $true
         if ($script:Timer) { $script:Timer.Stop() }
         if ($script:HitTestTimer) { $script:HitTestTimer.Stop() }
@@ -864,6 +900,7 @@ $DragHandle.Add_PreviewMouseLeftButtonDown({
         try { $Window.DragMove() }
         finally {
             Save-WindowPosition
+            $script:LastMassLayoutKey = ""
             $Root.CacheMode = $null
             $script:IsDragging = $false
             Update-Visual
@@ -896,6 +933,9 @@ $DetailsButton.Add_Click({
 $Scale1Button.Add_Click({ Set-StarScale 1; $_.Handled = $true })
 $Scale2Button.Add_Click({ Set-StarScale 2; $_.Handled = $true })
 $Scale3Button.Add_Click({ Set-StarScale 3; $_.Handled = $true })
+$LockPositionCheckBox.Add_Checked({ Set-PositionLock $true; $_.Handled = $true })
+$LockPositionCheckBox.Add_Unchecked({ Set-PositionLock $false; $_.Handled = $true })
+Set-PositionLock $PositionLocked $false
 
 $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
 function Update-Visual {
@@ -1183,9 +1223,8 @@ function Update-Visual {
         $script:LastDetailsText = $detailsContent
         $DetailsText.Text = $detailsContent
     }
-    $edgeZoneX = if ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.x -lt 0.25) { "left" } elseif ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.x -gt 0.75) { "right" } else { "center" }
-    $edgeZoneY = if ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.y -gt 0.65) { "bottom" } else { "top" }
-    $massLayoutKey = "$massLabel|$stage|$rateSummary|$($script:StarScaleLevel)|$edgeZoneX|$edgeZoneY"
+    $positionKey = "{0},{1}" -f [Math]::Round($Window.Left), [Math]::Round($Window.Top)
+    $massLayoutKey = "$massLabel|$stage|$rateSummary|$($script:StarScaleLevel)|$positionKey"
     if ($massLayoutKey -ne $script:LastMassLayoutKey) {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
@@ -1194,20 +1233,36 @@ function Update-Visual {
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
         $DetailsPanel.Measure((New-Object Windows.Size($DetailsPanel.Width, [double]::PositiveInfinity)))
         $panelWidth = [Math]::Max(112.0, $MassPanel.DesiredSize.Width)
-        $panelLeft = $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 100 * $starMultiplier } else { 0 })
-        if ($edgeZoneX -eq "left") { $panelLeft = $CenterX + 12.0 }
-        elseif ($edgeZoneX -eq "right") { $panelLeft = $CenterX - $panelWidth - 12.0 }
+        $visibleLeft = 4.0
+        $visibleTop = 4.0
+        $visibleRight = $Window.Width - 4.0
+        $visibleBottom = $Window.Height - 4.0
+        if ($hostWindow -and $hostWindow.Rect) {
+            $hostScale = Get-OverlayScale ([double]$hostWindow.Scale)
+            $visibleLeft = [Math]::Max($visibleLeft, $hostWindow.Rect.Left / $hostScale - $Window.Left + 4.0)
+            $visibleTop = [Math]::Max($visibleTop, $hostWindow.Rect.Top / $hostScale - $Window.Top + 4.0)
+            $visibleRight = [Math]::Min($visibleRight, $hostWindow.Rect.Right / $hostScale - $Window.Left - 4.0)
+            $visibleBottom = [Math]::Min($visibleBottom, $hostWindow.Rect.Bottom / $hostScale - $Window.Top - 4.0)
+        }
+        $idealPanelLeft = $CenterX - $panelWidth / 2.0
+        $panelLeft = [Math]::Max($visibleLeft, [Math]::Min($visibleRight - $panelWidth, $idealPanelLeft))
         $panelDistance = [Math]::Max(30.0, $displayDiameter * 0.70)
-        $panelTop = if ($edgeZoneY -eq "bottom") { $CenterY - $panelDistance - $MassPanel.DesiredSize.Height } else { $CenterY + $panelDistance }
+        $idealPanelTop = $CenterY + $panelDistance
+        $panelTop = if ($idealPanelTop + $MassPanel.DesiredSize.Height -le $visibleBottom) {
+            $idealPanelTop
+        }
+        else { [Math]::Max($visibleTop, $CenterY - $panelDistance - $MassPanel.DesiredSize.Height) }
         [Windows.Controls.Canvas]::SetLeft($MassPanel, $panelLeft)
         [Windows.Controls.Canvas]::SetTop($MassPanel, $panelTop)
-        [Windows.Controls.Canvas]::SetLeft($DetailsPanel, [Math]::Max(4.0, [Math]::Min($Window.Width - $DetailsPanel.Width - 4.0, $panelLeft + $panelWidth - $DetailsPanel.Width)))
+        $idealDetailsLeft = $CenterX - $DetailsPanel.Width / 2.0
+        $detailsLeft = [Math]::Max($visibleLeft, [Math]::Min($visibleRight - $DetailsPanel.Width, $idealDetailsLeft))
+        [Windows.Controls.Canvas]::SetLeft($DetailsPanel, $detailsLeft)
         $detailsBelow = $panelTop + $MassPanel.DesiredSize.Height + 5.0
-        $detailsTop = if ($edgeZoneY -eq "bottom" -or $detailsBelow + $DetailsPanel.DesiredSize.Height -gt $Window.Height - 4.0) {
-            $panelTop - $DetailsPanel.DesiredSize.Height - 5.0
+        $detailsTop = if ($detailsBelow + $DetailsPanel.DesiredSize.Height -gt $visibleBottom) {
+            [Math]::Max($visibleTop, $panelTop - $DetailsPanel.DesiredSize.Height - 5.0)
         }
         else { $detailsBelow }
-        [Windows.Controls.Canvas]::SetTop($DetailsPanel, [Math]::Max(4.0, $detailsTop))
+        [Windows.Controls.Canvas]::SetTop($DetailsPanel, $detailsTop)
     }
     $MassPanel.Opacity = if ($visible -or $SelfTest) {
         if ($script:InteractivePanelActive -or $SelfTest) { 0.96 } else { 0.46 }
@@ -1272,6 +1327,9 @@ if ($SelfTest) {
     if (-not (Test-PointOverElement $panelPoint $MassPanel 0.0)) {
         throw "Token Star overlay auto-sized panel hit-test self-test failed."
     }
+    if ([Math]::Abs(($panelLeft + $MassPanel.DesiredSize.Width / 2.0) - $CenterX) -gt 1.0) {
+        throw "Token Star overlay centered-panel layout self-test failed."
+    }
     $travelRect = New-Object TokenStarNative+RECT
     $travelRect.Left = 0; $travelRect.Top = 0; $travelRect.Right = 1200; $travelRect.Bottom = 800
     $travelBounds = Get-WindowTravelBounds ([pscustomobject]@{ Rect = $travelRect; Scale = 1.0 })
@@ -1299,6 +1357,14 @@ if ($SelfTest) {
     $Scale3Button.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
     if ($script:StarScaleLevel -ne 3 -or [Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - 1.0) -gt 0.0001) {
         throw "Token Star overlay 3x scale self-test failed."
+    }
+    Set-PositionLock $true $false
+    if (-not $script:PositionLocked -or $DragHandle.Cursor.ToString() -ne "Arrow") {
+        throw "Token Star overlay position-lock self-test failed."
+    }
+    Set-PositionLock $false $false
+    if ($script:PositionLocked -or $DragHandle.Cursor.ToString() -ne "SizeAll") {
+        throw "Token Star overlay position-unlock self-test failed."
     }
     if (-not $CaptureDetails) {
         $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))

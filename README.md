@@ -52,6 +52,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\ins
   limit, reset time, and seven-day limit.
 - Use `1x`, `2x`, or `3x` at the bottom of the menu to resize the star. `1x` is
   one-third of the original size; `3x` is the original size.
+- Check `Lock position` to prevent accidental dragging. Uncheck it to move the
+  star again.
 - The star hides when you switch to another project.
 
 <img src="assets/overlay-token-details.png" width="500" alt="Token details and star size menu">
