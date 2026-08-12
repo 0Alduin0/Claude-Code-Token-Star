@@ -223,9 +223,11 @@ public static class TokenStarNative {
                    FontFamily="Consolas" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
         <TextBlock Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
                    FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="5,0,0,0" />
-        <Button Name="DetailsButton" Content="&#x25BC;" ToolTip="Token details"
-                Foreground="#FFB8D8F8" Background="Transparent" BorderThickness="0"
-                FontSize="12" Padding="8,0,0,0" Cursor="Hand" Focusable="False" />
+        <Button Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
+                Foreground="#FFFFFFFF" Background="#FF14283B" BorderBrush="#FF527CA4"
+                BorderThickness="1,0,0,0" MinWidth="30" FontWeight="Bold"
+                FontSize="14" Padding="7,0" Margin="7,-4,-8,-4"
+                Cursor="Hand" Focusable="False" />
       </StackPanel>
     </Border>
     <Border Name="DetailsPanel" Width="250" Background="#F203060C" BorderBrush="#AA4C7199"
@@ -672,6 +674,7 @@ $DragHandleActive = $false
 $InteractivePanelActive = $false
 $ClickThroughEnabled = $true
 $DetailsOpen = $false
+$IsDragging = $false
 $DownArrow = [string][char]0x25BC
 $UpArrow = [string][char]0x25B2
 $DefaultPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#CC5F91BF"))
@@ -686,16 +689,26 @@ function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
            $Point.Y -ge ($top - $Padding) -and $Point.Y -le ($top + $height + $Padding)
 }
 
+function Get-CursorHitRegion {
+    $point = New-Object TokenStarNative+POINT
+    if ($Window.Opacity -le 0.01 -or -not [TokenStarNative]::GetCursorPos([ref]$point)) {
+        return [pscustomobject]@{ OverStar = $false; OverPanel = $false }
+    }
+    try {
+        $local = $Window.PointFromScreen((New-Object Windows.Point($point.X, $point.Y)))
+        return [pscustomobject]@{
+            OverStar = Test-PointOverElement $local $DragHandle 7.0
+            OverPanel = Test-PointOverElement $local $MassPanel 9.0
+        }
+    }
+    catch { return [pscustomobject]@{ OverStar = $false; OverPanel = $false } }
+}
+
 function Update-HitTestMode {
     if ($script:OverlayHandle -eq [IntPtr]::Zero) { return }
-    $point = New-Object TokenStarNative+POINT
-    $overStar = $false
-    $overPanel = $false
-    if ($Window.Opacity -gt 0.01 -and [TokenStarNative]::GetCursorPos([ref]$point)) {
-        $local = $Window.PointFromScreen((New-Object Windows.Point($point.X, $point.Y)))
-        $overStar = Test-PointOverElement $local $DragHandle 7.0
-        $overPanel = Test-PointOverElement $local $MassPanel 7.0
-    }
+    $hit = Get-CursorHitRegion
+    $overStar = [bool]$hit.OverStar
+    $overPanel = [bool]$hit.OverPanel
 
     $script:DragHandleActive = $overStar
     $script:InteractivePanelActive = $overPanel
@@ -715,9 +728,18 @@ function Update-HitTestMode {
 
 $DragHandle.Add_PreviewMouseLeftButtonDown({
     if ($_.ChangedButton -eq [Windows.Input.MouseButton]::Left) {
+        $script:IsDragging = $true
+        if ($script:Timer) { $script:Timer.Stop() }
+        if ($script:HitTestTimer) { $script:HitTestTimer.Stop() }
+        $Root.CacheMode = New-Object Windows.Media.BitmapCache
         try { $Window.DragMove() }
         finally {
             Save-WindowPosition
+            $Root.CacheMode = $null
+            $script:IsDragging = $false
+            Update-Visual
+            if ($script:Timer) { $script:Timer.Start() }
+            if ($script:HitTestTimer) { $script:HitTestTimer.Start() }
             if ($script:LastHostWindow -and $script:LastHostWindow.Handle) {
                 [void][TokenStarNative]::SetForegroundWindow($script:LastHostWindow.Handle)
             }
@@ -726,7 +748,7 @@ $DragHandle.Add_PreviewMouseLeftButtonDown({
     }
 })
 
-$DetailsButton.Add_Click({
+function Toggle-DetailsPanel {
     $script:DetailsOpen = -not $script:DetailsOpen
     $DetailsButton.Content = if ($script:DetailsOpen) { $script:UpArrow } else { $script:DownArrow }
     $DetailsPanel.Visibility = if ($script:DetailsOpen) { "Visible" } else { "Collapsed" }
@@ -734,6 +756,10 @@ $DetailsButton.Add_Click({
     if ($script:LastHostWindow -and $script:LastHostWindow.Handle) {
         [void][TokenStarNative]::SetForegroundWindow($script:LastHostWindow.Handle)
     }
+}
+
+$DetailsButton.Add_Click({
+    Toggle-DetailsPanel
     $_.Handled = $true
 })
 
@@ -1053,9 +1079,20 @@ $Window.Add_SourceInitialized({
     $script:WindowHook = [Windows.Interop.HwndSourceHook]{
         param($hwnd, $message, $wParam, $lParam, [ref]$handled)
         if ($message -eq 0x0084) {
+            $hit = Get-CursorHitRegion
+            $script:DragHandleActive = [bool]$hit.OverStar
+            $script:InteractivePanelActive = [bool]$hit.OverPanel
             $handled.Value = $true
-            if ($script:DragHandleActive -or $script:InteractivePanelActive) { return [IntPtr]1 }
+            if ($hit.OverStar -or $hit.OverPanel) { return [IntPtr]1 }
             return [IntPtr](-1)
+        }
+        if ($message -eq 0x0202) {
+            $hit = Get-CursorHitRegion
+            if ($hit.OverPanel) {
+                Toggle-DetailsPanel
+                $handled.Value = $true
+                return [IntPtr]::Zero
+            }
         }
         if ($message -eq 0x0232) {
             Save-WindowPosition
@@ -1117,10 +1154,15 @@ if ($SelfTest) {
 
 $Timer = New-Object Windows.Threading.DispatcherTimer
 $Timer.Interval = [TimeSpan]::FromMilliseconds(80)
-$Timer.Add_Tick({ Update-Visual; Update-HitTestMode })
+$Timer.Add_Tick({ Update-Visual })
 $Timer.Start()
+$HitTestTimer = New-Object Windows.Threading.DispatcherTimer
+$HitTestTimer.Interval = [TimeSpan]::FromMilliseconds(25)
+$HitTestTimer.Add_Tick({ Update-HitTestMode })
+$HitTestTimer.Start()
 try { [void]$Window.ShowDialog() }
 finally {
+    if ($script:HitTestTimer) { $script:HitTestTimer.Stop() }
     try {
         if (Test-Path -LiteralPath $PidPath) {
             $pidRecord = [IO.File]::ReadAllText($PidPath) | ConvertFrom-Json
