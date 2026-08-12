@@ -137,6 +137,12 @@ try {
                 cache_read_input_tokens = 45000
                 output_tokens = 3210
             }
+            breakdown = [ordered]@{
+                system_prompt_tokens = 17000
+                system_tools_tokens = 12000
+                memory_files_tokens = 4300
+                skills_tokens = 2800
+            }
         }
         rate_limits = [ordered]@{
             five_hour = [ordered]@{ used_percentage = 61; resets_at = $fiveHourReset }
@@ -163,8 +169,20 @@ try {
     Assert-True ([long]$overlayState.breakdown.cache_creation_input_tokens -eq 60000) "cache creation breakdown is wrong"
     Assert-True ([long]$overlayState.breakdown.cache_read_input_tokens -eq 45000) "cache read breakdown is wrong"
     Assert-True ([long]$overlayState.breakdown.total_output_tokens -eq 3210) "output token breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.system_prompt_tokens -eq 17000) "system prompt breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.system_tools_tokens -eq 12000) "system tools breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.memory_files_tokens -eq 4300) "memory files breakdown is wrong"
+    Assert-True ([long]$overlayState.breakdown.skills_tokens -eq 2800) "skills breakdown is wrong"
     Assert-True ([double]$overlayState.rate_limits.five_hour.used_percentage -eq 61) "five-hour percentage is wrong"
     Assert-True ([long]$overlayState.rate_limits.five_hour.resets_at -eq $fiveHourReset) "five-hour reset is wrong"
+
+    [void]$statusPayload.context_window.Remove("breakdown")
+    $null = ($statusPayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge
+    $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
+    Assert-True ([long]$overlayState.breakdown.system_prompt_tokens -eq -1) "missing system prompt tokens should stay unavailable"
+    Assert-True ([long]$overlayState.breakdown.system_tools_tokens -eq -1) "missing system tools tokens should stay unavailable"
+    Assert-True ([long]$overlayState.breakdown.memory_files_tokens -eq -1) "missing memory file tokens should stay unavailable"
+    Assert-True ([long]$overlayState.breakdown.skills_tokens -eq -1) "missing skill tokens should stay unavailable"
 
     $outsidePayload = [ordered]@{
         workspace = [ordered]@{ project_dir = $OtherProject; current_dir = $OtherProject }

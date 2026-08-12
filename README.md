@@ -1,23 +1,21 @@
 # Claude Code Token Star
 
-Claude Code'un dolan context penceresini canlı bir yıldıza dönüştürür. Token
-kullanımı arttıkça yıldız büyür ve altı kozmik aşamadan geçer.
+Turn Claude Code's context usage into a live star. As the context fills, the
+star grows and changes through six cosmic stages.
 
-- Windows: PyCharm, IntelliJ, Android Studio, WebStorm, Rider, CLion, GoLand,
-  PhpStorm, RubyMine, DataGrip, VS Code, Cursor, Visual Studio ve Eclipse
-  üzerinde şeffaf overlay.
-- Linux/macOS: Ghostty içinde GLSL shader.
-- Yalnızca kurduğunuz projede görünür.
-- Yeni Claude oturumu açmaz; açık olan oturuma bağlanır.
+- Windows: transparent overlay for JetBrains IDEs, VS Code, Cursor, Visual
+  Studio, and Eclipse.
+- Linux/macOS: GLSL shader for Ghostty.
+- Runs only in the project where you install it.
+- Connects to your current Claude Code session. It does not open a new one.
 
-## Nasıl çalışıyor?
+## How it works
 
-Claude Code'un status-line verisi context yüzdesini, token dökümünü ve kullanım
-limitlerini küçük bir köprüye gönderir. Windows'ta WPF overlay, Linux/macOS'ta
-GLSL shader bu veriyi yıldız animasyonuna çevirir. Ek API çağrısı veya token
-harcaması yapmaz.
+Claude Code sends its status-line data to a small local bridge. The bridge
+updates the Windows overlay or Ghostty shader. It makes no extra API calls and
+uses no extra tokens.
 
-## Yıldız aşamaları
+## Star stages
 
 | | |
 | --- | --- |
@@ -25,102 +23,97 @@ harcaması yapmaz.
 | **Blue Giant · 35–55%**<br><img src="assets/overlay-blue-giant.png" width="420" alt="Blue Giant"> | **Hypergiant · 55–75%**<br><img src="assets/overlay-hypergiant.png" width="420" alt="Hypergiant"> |
 | **Neutron Star · 75–90%**<br><img src="assets/overlay-neutron-star.png" width="420" alt="Neutron Star"> | **Quasar · 90–100%**<br><img src="assets/overlay-quasar.png" width="420" alt="Quasar"> |
 
-## Windows kurulumu
+## Install on Windows
 
-Gerekenler: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Git
-ve Windows PowerShell. Python gerekmez.
+You need Claude Code, Git, and Windows PowerShell. Python is not required.
 
-1. PyCharm veya kullandığınız IDE'de projenizi açın.
-2. IDE'nin terminalini açın.
-3. Aşağıdaki iki komutu sırayla kopyalayıp yapıştırın:
+Open your project in your IDE, open its terminal, then paste these commands:
 
 ```powershell
 git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git .claude-token-star
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\install.ps1
 ```
 
-Hepsi bu. Installer ikinci bir Claude açmaz. Açık Claude oturumu ayarları kısa
-bir gecikmeden sonra yeniden yükler; overlay aynı oturumun sonraki status
-yenilemesinde çalışmaya başlar. İlk kullanımda Claude komuta güvenmek için onay
-isteyebilir.
+The star appears after Claude Code's next status refresh.
 
-Güncellemek için aynı proje terminalinde:
+To update:
 
 ```powershell
 git -C .claude-token-star pull
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\install.ps1
 ```
 
-## Kullanım
+## Use it
 
-- Taşımak için yıldızın üzerine basıp sürükleyin.
-- `MASS 85K` yaklaşık 85 bin context token anlamına gelir.
-- `5H %61 | 2h 23m`, beş saatlik limitin %61'inin kullanıldığını ve yenilenme
-  süresini gösterir.
-- Sağdaki oka basınca `/context` benzeri token ve limit dökümü açılır.
-- Başka bir projeye geçtiğinizde bu projenin yıldızı otomatik olarak gizlenir.
+- Drag the star itself to move it, including close to IDE corners and edges.
+- `MASS 85K` means about 85,000 context tokens.
+- `5H %61 | 2h 23m` shows five-hour usage and time until reset.
+- Click the arrow for total input, system prompt, system tools, memory files,
+  skills, cache read, remaining context, five-hour limit, reset time, and
+  seven-day limit.
+- Use `1x`, `2x`, or `3x` at the bottom of the menu to resize the star. `1x` is
+  one-third of the original size; `3x` is the original size.
+- The star hides when you switch to another project.
 
-<img src="assets/overlay-token-details.png" width="500" alt="Açık token ve kullanım limiti menüsü">
+Claude Code's current [status-line data](https://code.claude.com/docs/en/statusline)
+does not expose separate system prompt, system tools, memory files, or skills
+token counts. Those rows show `--` unless Claude adds them to the payload.
 
-Aşamaları gerçek token harcamadan denemek için:
+<img src="assets/overlay-token-details.png" width="500" alt="Token details and star size menu">
+
+Test every stage without spending tokens:
 
 ```powershell
 .\.claude-token-star\token-test.ps1 sweep
 ```
 
-## Tarayıcıda önizleme
-
-Windows'ta aşağıdaki tek komut yerel sunucuyu başlatır ve önizlemeyi tarayıcıda
-açar. Bitirdiğinizde terminalde Enter'a basmanız sunucuyu kapatır.
+## Browser preview
 
 ```powershell
 .\.claude-token-star\preview.ps1
 ```
 
-Elle açılacak adres: <http://127.0.0.1:4173/preview.html>
+This opens <http://127.0.0.1:4173/preview.html>. Press Enter in the terminal to
+stop it.
 
-## Windows'tan tamamen kaldırma
+## Remove from Windows
 
-Projenizin terminalinde aşağıdaki iki komutu sırayla çalıştırın:
+Run both commands in the project terminal:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\uninstall.ps1
 Remove-Item -LiteralPath .\.claude-token-star -Recurse -Force
 ```
 
-İlk komut overlay ve yerel önizlemeyi durdurur; Claude status line ve hook
-ayarlarını geri alır; Windows Terminal profilini, token durumunu, kayıtlı konumu
-ve runtime dosyalarını siler. İkinci komut indirdiğiniz `.claude-token-star`
-klasörünü de siler.
+This removes the overlay, settings, runtime files, saved state, and downloaded
+folder.
 
-## Linux/macOS kurulumu
+## Linux/macOS
 
-Ghostty 1.3+, Claude Code ve Python 3.10+ gerekir:
+You need Ghostty 1.3+, Claude Code, Git, and Python 3.10+.
 
 ```sh
 git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git .claude-token-star
 sh ./.claude-token-star/install.sh
 ```
 
-Kaldırma ve indirilen klasörü temizleme:
+Remove everything:
 
 ```sh
 sh ./.claude-token-star/uninstall.sh
 rm -rf -- ./.claude-token-star
 ```
 
-## Sorun olursa
+## Troubleshooting
 
 ```powershell
 .\.claude-token-star\token-test.ps1 doctor
 ```
 
-Overlay yalnızca kurulumda seçilen proje desteklenen IDE'nin ön plan
-penceresindeyken görünür. Değerler ilk Claude yanıtından önce boşsa `--`
-gösterilmesi normaldir.
+The overlay appears only when the installed project is open in a supported IDE.
+It is normal to see `--` before Claude Code sends the first status update.
 
-## Lisans
+## License
 
-MIT. Yıldız evrimi için [NASA Star Lifecycle](https://science.nasa.gov/mission/webb/star-lifecycle/),
-quasar görsel dili için [NASA Active Galactic Nuclei](https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-are-active-galactic-nuclei/)
-kaynak alınmıştır.
+MIT. Visual references: [NASA Star Lifecycle](https://science.nasa.gov/mission/webb/star-lifecycle/)
+and [NASA Active Galactic Nuclei](https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-are-active-galactic-nuclei/).

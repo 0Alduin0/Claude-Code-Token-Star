@@ -75,6 +75,7 @@ public static class TokenStarNative {
         Background="Transparent" Topmost="True" ShowInTaskbar="False"
         ShowActivated="False" Focusable="False" ResizeMode="NoResize">
   <Canvas Name="Root" Width="500" Height="500">
+    <Canvas Name="VisualLayer" Width="500" Height="500" IsHitTestVisible="False">
     <Canvas Name="Stars" />
     <Ellipse Name="Nebula" Opacity="0">
     </Ellipse>
@@ -212,34 +213,57 @@ public static class TokenStarNative {
       </Path.Stroke>
       <Path.RenderTransform><RotateTransform Angle="-12" CenterX="310" CenterY="165" /></Path.RenderTransform>
     </Path>
+    </Canvas>
 
     <Ellipse Name="DragHandle" Width="92" Height="92" Fill="#01000000"
              Cursor="SizeAll" />
 
     <Border Name="MassPanel" Background="#F203060C" BorderBrush="#CC5F91BF"
-            BorderThickness="1" CornerRadius="4" Padding="8,4" Opacity="0">
+            BorderThickness="1" CornerRadius="4" Padding="7,3" Opacity="0">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="32" />
+          <ColumnDefinition Width="28" />
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Name="MassText" Text="MASS 0K" Foreground="#FFF8FCFF"
-                   FontFamily="Consolas" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
+                   FontFamily="Consolas" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
-                   FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="5,0,5,0" />
+                   FontFamily="Consolas" FontSize="11" VerticalAlignment="Center" Margin="4,0,4,0" />
         <Button Grid.Column="2" Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
                 Foreground="#FFFFFFFF" Background="#FF14283B" BorderBrush="#FF527CA4"
-                BorderThickness="1,0,0,0" MinWidth="32" FontWeight="Bold"
-                FontSize="14" Padding="7,0" Margin="0,-4,-8,-4"
+                BorderThickness="1,0,0,0" MinWidth="28" FontWeight="Bold"
+                FontSize="12" Padding="5,0" Margin="0,-3,-7,-3"
                 Cursor="Hand" Focusable="False" />
       </Grid>
     </Border>
-    <Border Name="DetailsPanel" Width="250" Background="#F203060C" BorderBrush="#AA4C7199"
-            BorderThickness="1" CornerRadius="4" Padding="10,8" Opacity="0"
-            Visibility="Collapsed" IsHitTestVisible="False">
-      <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Consolas"
-                 FontSize="12" LineHeight="18" />
+    <Border Name="DetailsPanel" Width="218" Background="#F203060C" BorderBrush="#AA4C7199"
+            BorderThickness="1" CornerRadius="4" Padding="8,6" Opacity="0"
+            Visibility="Collapsed">
+      <StackPanel>
+        <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Consolas"
+                   FontSize="11" LineHeight="15" />
+        <Border Height="1" Background="#664C7199" Margin="0,6,0,5" />
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="34" />
+            <ColumnDefinition Width="34" />
+            <ColumnDefinition Width="34" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0" Text="STAR SIZE" Foreground="#FFA9C4DF"
+                     FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Name="Scale1Button" Content="1x" Margin="1,0"
+                  Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
+                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+          <Button Grid.Column="2" Name="Scale2Button" Content="2x" Margin="1,0"
+                  Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
+                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+          <Button Grid.Column="3" Name="Scale3Button" Content="3x" Margin="1,0"
+                  Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
+                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+        </Grid>
+      </StackPanel>
     </Border>
   </Canvas>
 </Window>
@@ -248,6 +272,7 @@ public static class TokenStarNative {
 $reader = New-Object System.Xml.XmlNodeReader $Xaml
 $Window = [Windows.Markup.XamlReader]::Load($reader)
 $Root = $Window.FindName("Root")
+$VisualLayer = $Window.FindName("VisualLayer")
 $Stars = $Window.FindName("Stars")
 $Rays = $Window.FindName("Rays")
 $Particles = $Window.FindName("Particles")
@@ -284,6 +309,9 @@ $RateText = $Window.FindName("RateText")
 $DetailsButton = $Window.FindName("DetailsButton")
 $DetailsPanel = $Window.FindName("DetailsPanel")
 $DetailsText = $Window.FindName("DetailsText")
+$Scale1Button = $Window.FindName("Scale1Button")
+$Scale2Button = $Window.FindName("Scale2Button")
+$Scale3Button = $Window.FindName("Scale3Button")
 
 foreach ($visual in @(
     $Stars, $Nebula, $PulseRingOuter, $PulseRingInner, $Rays, $Particles,
@@ -297,6 +325,7 @@ foreach ($visual in @(
 }
 $DragHandle.IsHitTestVisible = $true
 $MassPanel.IsHitTestVisible = $true
+$DetailsPanel.IsHitTestVisible = $true
 
 $CenterX = 310.0
 $CenterY = 165.0
@@ -474,7 +503,16 @@ function New-CoronaGeometry([double]$Radius, [int]$Points, [double]$Phase, [doub
 }
 
 function Format-TokenDetail([long]$Tokens) {
+    if ($Tokens -lt 0) { return "--" }
     return $Tokens.ToString("N0", [Globalization.CultureInfo]::CurrentCulture)
+}
+
+function Get-BreakdownToken($Breakdown, [string]$Name, [long]$Fallback = -1L) {
+    if ($null -eq $Breakdown) { return $Fallback }
+    $property = $Breakdown.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) { return $Fallback }
+    try { return [long]$property.Value }
+    catch { return $Fallback }
 }
 
 function Format-ResetRemaining([long]$EpochSeconds) {
@@ -498,21 +536,21 @@ function Get-DetailsText {
     $breakdown = $State.breakdown
     $limits = $State.rate_limits
     return @(
-        "CONTEXT $([Math]::Round([double]$State.level * 100))%"
-        "Total input       $(Format-TokenDetail ([long]$breakdown.total_input_tokens))"
-        "Fresh input       $(Format-TokenDetail ([long]$breakdown.fresh_input_tokens))"
-        "Cache creation    $(Format-TokenDetail ([long]$breakdown.cache_creation_input_tokens))"
-        "Cache read        $(Format-TokenDetail ([long]$breakdown.cache_read_input_tokens))"
-        "Last output       $(Format-TokenDetail ([long]$breakdown.total_output_tokens))"
-        "Remaining         $(Format-TokenDetail ([long]$breakdown.remaining_tokens))"
+        "Total input     $(Format-TokenDetail (Get-BreakdownToken $breakdown 'total_input_tokens' 0L))"
+        "System prompt   $(Format-TokenDetail (Get-BreakdownToken $breakdown 'system_prompt_tokens'))"
+        "System tools    $(Format-TokenDetail (Get-BreakdownToken $breakdown 'system_tools_tokens'))"
+        "Memory files    $(Format-TokenDetail (Get-BreakdownToken $breakdown 'memory_files_tokens'))"
+        "Skills          $(Format-TokenDetail (Get-BreakdownToken $breakdown 'skills_tokens'))"
+        "Cache read      $(Format-TokenDetail (Get-BreakdownToken $breakdown 'cache_read_input_tokens' 0L))"
+        "Remaining       $(Format-TokenDetail (Get-BreakdownToken $breakdown 'remaining_tokens' 0L))"
         ""
-        "5-hour limit      $(if ([double]$limits.five_hour.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.five_hour.used_percentage) } else { '--' })"
-        "Resets in         $(Format-ResetRemaining ([long]$limits.five_hour.resets_at))"
-        "7-day limit       $(if ([double]$limits.seven_day.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.seven_day.used_percentage) } else { '--' })"
+        "5-hour limit    $(if ([double]$limits.five_hour.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.five_hour.used_percentage) } else { '--' })"
+        "Reset in        $(Format-ResetRemaining ([long]$limits.five_hour.resets_at))"
+        "7-day limit     $(if ([double]$limits.seven_day.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.seven_day.used_percentage) } else { '--' })"
     ) -join "`n"
 }
 
-$EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; total_output_tokens = 0L; fresh_input_tokens = 0L; cache_creation_input_tokens = 0L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
+$EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; system_prompt_tokens = -1L; system_tools_tokens = -1L; memory_files_tokens = -1L; skills_tokens = -1L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
 $EmptyRateLimits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L }; seven_day = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L } }
 $State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
 $LastStateWrite = [datetime]::MinValue
@@ -521,6 +559,7 @@ $LastHostWindow = $null
 $LastHostSignature = ""
 $LastMassLayoutKey = ""
 $LastDetailsText = ""
+$StarScaleLevel = 3
 $NextStatePoll = 0.0
 $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
@@ -533,6 +572,10 @@ if (Test-Path -LiteralPath $PositionPath) {
         $OverlayPosition = [pscustomobject]@{
             x = [Math]::Min(1.0, [Math]::Max(0.0, [double]$savedPosition.x))
             y = [Math]::Min(1.0, [Math]::Max(0.0, [double]$savedPosition.y))
+        }
+        if ($savedPosition.PSObject.Properties['scale']) {
+            $savedScale = [int]$savedPosition.scale
+            if ($savedScale -ge 1 -and $savedScale -le 3) { $StarScaleLevel = $savedScale }
         }
     }
     catch { }
@@ -550,7 +593,7 @@ function Read-TokenState {
             stage = Get-Stage $demoNormalized
             project_root = ""
             project_name = ""
-            breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; total_output_tokens = 4200L; fresh_input_tokens = [long][Math]::Round($demoTokens * 0.12); cache_creation_input_tokens = [long][Math]::Round($demoTokens * 0.18); cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
+            breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; system_prompt_tokens = [long][Math]::Round($demoTokens * 0.09); system_tools_tokens = [long][Math]::Round($demoTokens * 0.06); memory_files_tokens = [long][Math]::Round($demoTokens * 0.025); skills_tokens = [long][Math]::Round($demoTokens * 0.015); cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
             rate_limits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = 61.0; resets_at = $demoReset }; seven_day = [pscustomobject]@{ used_percentage = 34.0; resets_at = [DateTimeOffset]::UtcNow.AddDays(3).ToUnixTimeSeconds() } }
         }
         return
@@ -636,19 +679,20 @@ function Get-OverlayScale([double]$Fallback) {
 }
 
 function Get-PlacementInset {
-    switch ([string]$State.stage) {
-        "RED DWARF" { return 38.0 }
-        "MAIN SEQUENCE" { return 50.0 }
-        "BLUE GIANT" { return 64.0 }
-        "HYPERGIANT" { return 78.0 }
-        "NEUTRON STAR" { return 38.0 }
-        default { return 52.0 }
+    $baseInset = switch ([string]$State.stage) {
+        "RED DWARF" { 38.0 }
+        "MAIN SEQUENCE" { 50.0 }
+        "BLUE GIANT" { 64.0 }
+        "HYPERGIANT" { 78.0 }
+        "NEUTRON STAR" { 38.0 }
+        default { 52.0 }
     }
+    return [Math]::Max(14.0, $baseInset * ($script:StarScaleLevel / 3.0) * 0.50)
 }
 
 function Get-WindowTravelBounds($HostWindow) {
     $scale = Get-OverlayScale ([double]$HostWindow.Scale)
-    $margin = 4.0
+    $margin = 1.0
     $left = $HostWindow.Rect.Left / $scale + $margin
     $top = $HostWindow.Rect.Top / $scale + $margin
     $right = $HostWindow.Rect.Right / $scale - $margin
@@ -702,6 +746,7 @@ function Save-WindowPosition {
     $script:OverlayPosition = [pscustomobject]@{
         x = if ($bounds.Width -gt 0) { ($clampedLeft - $bounds.MinLeft) / $bounds.Width } else { 0.0 }
         y = if ($bounds.Height -gt 0) { ($clampedTop - $bounds.MinTop) / $bounds.Height } else { 0.0 }
+        scale = $script:StarScaleLevel
     }
     Update-RootClip $bounds
     $json = ($script:OverlayPosition | ConvertTo-Json -Compress) + "`n"
@@ -720,6 +765,35 @@ $DownArrow = [string][char]0x25BC
 $UpArrow = [string][char]0x25B2
 $DefaultPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#CC5F91BF"))
 $HoverPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FFFFFFFF"))
+$ScaleButtonInactive = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF0D1A27"))
+$ScaleButtonActive = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF28577D"))
+
+function Apply-StarScale {
+    $multiplier = $script:StarScaleLevel / 3.0
+    $VisualLayer.RenderTransform = [Windows.Media.ScaleTransform]::new($multiplier, $multiplier, $CenterX, $CenterY)
+    foreach ($entry in @(
+        [pscustomobject]@{ Level = 1; Button = $Scale1Button },
+        [pscustomobject]@{ Level = 2; Button = $Scale2Button },
+        [pscustomobject]@{ Level = 3; Button = $Scale3Button }
+    )) {
+        $entry.Button.Background = if ($entry.Level -eq $script:StarScaleLevel) { $ScaleButtonActive } else { $ScaleButtonInactive }
+        $entry.Button.FontWeight = if ($entry.Level -eq $script:StarScaleLevel) { "Bold" } else { "Normal" }
+    }
+}
+
+function Set-StarScale([int]$Level) {
+    if ($Level -lt 1 -or $Level -gt 3) { return }
+    $script:StarScaleLevel = $Level
+    Apply-StarScale
+    $script:LastMassLayoutKey = ""
+    Update-Visual
+    if ($script:LastHostWindow -and $script:LastHostWindow.Rect) {
+        Set-WindowPosition $script:LastHostWindow
+        Save-WindowPosition
+    }
+}
+
+Apply-StarScale
 
 function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
     $left = [Windows.Controls.Canvas]::GetLeft($Element)
@@ -741,21 +815,22 @@ function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
 function Get-CursorHitRegion {
     $point = New-Object TokenStarNative+POINT
     if ($Window.Opacity -le 0.01 -or -not [TokenStarNative]::GetCursorPos([ref]$point)) {
-        return [pscustomobject]@{ OverStar = $false; OverPanel = $false }
+        return [pscustomobject]@{ OverStar = $false; OverPanel = $false; OverDetails = $false }
     }
     try {
         if ($script:LastHostWindow -and $script:LastHostWindow.Rect -and
             ($point.X -lt $script:LastHostWindow.Rect.Left -or $point.X -gt $script:LastHostWindow.Rect.Right -or
              $point.Y -lt $script:LastHostWindow.Rect.Top -or $point.Y -gt $script:LastHostWindow.Rect.Bottom)) {
-            return [pscustomobject]@{ OverStar = $false; OverPanel = $false }
+            return [pscustomobject]@{ OverStar = $false; OverPanel = $false; OverDetails = $false }
         }
         $local = $Window.PointFromScreen((New-Object Windows.Point($point.X, $point.Y)))
         return [pscustomobject]@{
             OverStar = Test-PointOverElement $local $DragHandle 7.0
             OverPanel = Test-PointOverElement $local $MassPanel 9.0
+            OverDetails = $script:DetailsOpen -and (Test-PointOverElement $local $DetailsPanel 4.0)
         }
     }
-    catch { return [pscustomobject]@{ OverStar = $false; OverPanel = $false } }
+    catch { return [pscustomobject]@{ OverStar = $false; OverPanel = $false; OverDetails = $false } }
 }
 
 function Update-HitTestMode {
@@ -763,11 +838,12 @@ function Update-HitTestMode {
     $hit = Get-CursorHitRegion
     $overStar = [bool]$hit.OverStar
     $overPanel = [bool]$hit.OverPanel
+    $overDetails = [bool]$hit.OverDetails
 
     $script:DragHandleActive = $overStar
     $script:InteractivePanelActive = $overPanel
     $MassPanel.BorderBrush = if ($overPanel) { $HoverPanelBorder } else { $DefaultPanelBorder }
-    $shouldClickThrough = -not ($overStar -or $overPanel)
+    $shouldClickThrough = -not ($overStar -or $overPanel -or $overDetails)
     if ($shouldClickThrough -ne $script:ClickThroughEnabled) {
         $GWL_EXSTYLE = -20
         $WS_EX_TRANSPARENT = 0x20
@@ -817,6 +893,10 @@ $DetailsButton.Add_Click({
     $_.Handled = $true
 })
 
+$Scale1Button.Add_Click({ Set-StarScale 1; $_.Handled = $true })
+$Scale2Button.Add_Click({ Set-StarScale 2; $_.Handled = $true })
+$Scale3Button.Add_Click({ Set-StarScale 3; $_.Handled = $true })
+
 $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
 function Update-Visual {
     if (-not $SelfTest -and (Test-Path -LiteralPath $StopPath)) {
@@ -836,6 +916,7 @@ function Update-Visual {
     $Window.Opacity = if ($visible -or $SelfTest) { 1.0 } else { 0.0 }
     $DragHandle.IsHitTestVisible = $visible -or $SelfTest
     $MassPanel.IsHitTestVisible = $visible -or $SelfTest
+    $DetailsPanel.IsHitTestVisible = ($visible -or $SelfTest) -and $script:DetailsOpen
     if ($script:Timer) {
         $targetInterval = if ($visible) { 80 } else { 250 }
         if ($script:Timer.Interval.TotalMilliseconds -ne $targetInterval) {
@@ -865,7 +946,9 @@ function Update-Visual {
         "NEUTRON STAR" { 42.0 }
         default { 92.0 }
     }
-    Set-CenteredSize $DragHandle ([Math]::Max(42.0, $diameter)) ([Math]::Max(42.0, $diameter))
+    $starMultiplier = $script:StarScaleLevel / 3.0
+    $displayDiameter = $diameter * $starMultiplier
+    Set-CenteredSize $DragHandle ([Math]::Max(28.0, $displayDiameter)) ([Math]::Max(28.0, $displayDiameter))
     $colors = switch ($stage) {
         "RED DWARF" { @("#FFFF7A32", "#FF6D0702", "#001D0000") }
         "MAIN SEQUENCE" { @("#FFFFE89A", "#FFD95A09", "#002E0900") }
@@ -1100,20 +1183,31 @@ function Update-Visual {
         $script:LastDetailsText = $detailsContent
         $DetailsText.Text = $detailsContent
     }
-    $massLayoutKey = "$massLabel|$stage|$rateSummary"
+    $edgeZoneX = if ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.x -lt 0.25) { "left" } elseif ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.x -gt 0.75) { "right" } else { "center" }
+    $edgeZoneY = if ($hostWindow -and $hostWindow.Rect -and $OverlayPosition.y -gt 0.65) { "bottom" } else { "top" }
+    $massLayoutKey = "$massLabel|$stage|$rateSummary|$($script:StarScaleLevel)|$edgeZoneX|$edgeZoneY"
     if ($massLayoutKey -ne $script:LastMassLayoutKey) {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
         $RateText.Text = " | $rateSummary"
         $MassPanel.Width = [double]::NaN
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
+        $DetailsPanel.Measure((New-Object Windows.Size($DetailsPanel.Width, [double]::PositiveInfinity)))
         $panelWidth = [Math]::Max(112.0, $MassPanel.DesiredSize.Width)
-        $panelLeft = $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 100 } else { 0 })
-        $panelTop = $CenterY + [Math]::Max(58.0, $diameter * 0.70)
+        $panelLeft = $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 100 * $starMultiplier } else { 0 })
+        if ($edgeZoneX -eq "left") { $panelLeft = $CenterX + 12.0 }
+        elseif ($edgeZoneX -eq "right") { $panelLeft = $CenterX - $panelWidth - 12.0 }
+        $panelDistance = [Math]::Max(30.0, $displayDiameter * 0.70)
+        $panelTop = if ($edgeZoneY -eq "bottom") { $CenterY - $panelDistance - $MassPanel.DesiredSize.Height } else { $CenterY + $panelDistance }
         [Windows.Controls.Canvas]::SetLeft($MassPanel, $panelLeft)
         [Windows.Controls.Canvas]::SetTop($MassPanel, $panelTop)
         [Windows.Controls.Canvas]::SetLeft($DetailsPanel, [Math]::Max(4.0, [Math]::Min($Window.Width - $DetailsPanel.Width - 4.0, $panelLeft + $panelWidth - $DetailsPanel.Width)))
-        [Windows.Controls.Canvas]::SetTop($DetailsPanel, $panelTop + 38.0)
+        $detailsBelow = $panelTop + $MassPanel.DesiredSize.Height + 5.0
+        $detailsTop = if ($edgeZoneY -eq "bottom" -or $detailsBelow + $DetailsPanel.DesiredSize.Height -gt $Window.Height - 4.0) {
+            $panelTop - $DetailsPanel.DesiredSize.Height - 5.0
+        }
+        else { $detailsBelow }
+        [Windows.Controls.Canvas]::SetTop($DetailsPanel, [Math]::Max(4.0, $detailsTop))
     }
     $MassPanel.Opacity = if ($visible -or $SelfTest) { 1.0 } else { 0.0 }
 }
@@ -1137,7 +1231,7 @@ $Window.Add_SourceInitialized({
             $script:DragHandleActive = [bool]$hit.OverStar
             $script:InteractivePanelActive = [bool]$hit.OverPanel
             $handled.Value = $true
-            if ($hit.OverStar -or $hit.OverPanel) { return [IntPtr]1 }
+            if ($hit.OverStar -or $hit.OverPanel -or $hit.OverDetails) { return [IntPtr]1 }
             return [IntPtr](-1)
         }
         if ($message -eq 0x0202) {
@@ -1184,6 +1278,24 @@ if ($SelfTest) {
     $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
     if (-not $script:DetailsOpen -or $DetailsPanel.Visibility -ne "Visible") {
         throw "Token Star overlay details dropdown self-test failed."
+    }
+    $Root.Measure((New-Object Windows.Size(500, 500)))
+    $Root.Arrange((New-Object Windows.Rect(0, 0, 500, 500)))
+    $Root.UpdateLayout()
+    $detailsPoint = New-Object Windows.Point(
+        ([Windows.Controls.Canvas]::GetLeft($DetailsPanel) + $DetailsPanel.ActualWidth / 2.0),
+        ([Windows.Controls.Canvas]::GetTop($DetailsPanel) + $DetailsPanel.ActualHeight / 2.0)
+    )
+    if (-not (Test-PointOverElement $detailsPoint $DetailsPanel 0.0)) {
+        throw "Token Star overlay details-panel hit-test self-test failed."
+    }
+    $Scale1Button.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
+    if ($script:StarScaleLevel -ne 1 -or [Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - (1.0 / 3.0)) -gt 0.0001) {
+        throw "Token Star overlay 1x scale self-test failed."
+    }
+    $Scale3Button.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
+    if ($script:StarScaleLevel -ne 3 -or [Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - 1.0) -gt 0.0001) {
+        throw "Token Star overlay 3x scale self-test failed."
     }
     if (-not $CaptureDetails) {
         $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
