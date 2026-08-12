@@ -115,7 +115,7 @@ float2 massLabel(float2 px, float2 centerPx, float massK, float radiusPx, float 
     float size = clamp(Resolution.y / 250.0, 2.80, 4.60);
     int mass = (int)clamp(floor(massK + 0.5), 0.0, 4095.0);
     int digitCount = mass >= 1000 ? 4 : (mass >= 100 ? 3 : (mass >= 10 ? 2 : 1));
-    float widthCells = 17.0 + 4.0 * (float)digitCount;
+    float widthCells = 20.0 + 4.0 * (float)digitCount;
     float labelGap = radiusPx + 16.0 + sin(Time * 0.7);
     float originY = verticalSide > 0.0
         ? centerPx.y + labelGap
@@ -136,6 +136,8 @@ float2 massLabel(float2 px, float2 centerPx, float massK, float radiusPx, float 
     if (digitCount >= 3) { ink += putGlyph(px, origin, size, column, d1); column += 4.0; }
     if (digitCount >= 2) { ink += putGlyph(px, origin, size, column, d2); column += 4.0; }
     ink += putGlyph(px, origin, size, column, d3);
+    column += 4.0;
+    ink += putGlyph(px, origin, size, column, 13);
 
     float2 panelCenter = origin + float2(widthCells * size * 0.5, 2.5 * size);
     float2 panelHalf = float2(widthCells * size * 0.5 + 6.0, 2.5 * size + 5.0);

@@ -52,7 +52,7 @@ try {
     }
     [System.IO.File]::WriteAllText($LegacyState, ($legacyInstall | ConvertTo-Json -Depth 20), $Utf8NoBom)
 
-    foreach ($file in @("install.ps1", "uninstall.ps1", "token-test.ps1", "token-mass-windows.ps1", "token-star-overlay.ps1")) {
+    foreach ($file in @("install.ps1", "uninstall.ps1", "preview.ps1", "token-test.ps1", "token-mass-windows.ps1", "token-star-overlay.ps1")) {
         $tokens = $null
         $parseErrors = $null
         [System.Management.Automation.Language.Parser]::ParseFile(
@@ -65,6 +65,11 @@ try {
         -File (Join-Path $Root "token-star-overlay.ps1") -SelfTest -Demo
     Assert-True ($LASTEXITCODE -eq 0) "IDE overlay self-test failed"
     Assert-True (($overlayTest -join "") -match "self-test OK") "IDE overlay self-test output is wrong"
+
+    $previewPort = 42000 + (Get-Random -Minimum 0 -Maximum 1000)
+    $previewTest = & (Join-Path $Root "preview.ps1") -Port $previewPort -Test
+    Assert-True (($previewTest -join "") -match "lifecycle test OK") "local preview lifecycle test failed"
+    Assert-True (-not (Get-NetTCPConnection -LocalPort $previewPort -State Listen -ErrorAction SilentlyContinue)) "preview server was left running"
 
     & (Join-Path $Root "install.ps1") `
         -ClaudeSettings $ClaudeSettings `
@@ -87,6 +92,7 @@ try {
     Assert-True (@($settings.hooks.SessionStart).Count -eq 1) "SessionStart hook was duplicated"
     Assert-True (@($settings.hooks.SessionEnd).Count -eq 1) "SessionEnd hook was duplicated"
     Assert-True ($settings.statusLine.command -match "token-mass-windows\.ps1") "statusLine bridge missing"
+    Assert-True ([int]$settings.statusLine.refreshInterval -eq 1) "statusLine does not attach promptly to a running Claude session"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "profile.json")) "Terminal fragment missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1")) "IDE overlay missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) "overlay enable marker missing"
@@ -100,17 +106,17 @@ try {
     Assert-True ($legacyConfigAfter -match "font-size = 13") "unrelated Ghostty config was lost"
     Assert-True ($legacyConfigAfter -notmatch "ghostty-supernova") "legacy Ghostty block remains"
 
-    function global:claude { $global:TokenStarTestClaudePath = (Get-Location).Path }
-    $global:TokenStarTestClaudePath = $null
+    function global:claude { $global:TokenStarUnexpectedClaudeLaunch = $true }
+    $global:TokenStarUnexpectedClaudeLaunch = $false
     & (Join-Path $Root "install.ps1") `
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
         -ProjectPath $ScopedProject `
         -SkipVersionCheck | Out-Null
-    Assert-True ($global:TokenStarTestClaudePath -eq $ScopedProject) "installer did not start Claude in the current terminal/project"
+    Assert-True (-not $global:TokenStarUnexpectedClaudeLaunch) "installer started a second Claude session"
     Remove-Item Function:\global:claude -ErrorAction SilentlyContinue
-    Remove-Variable TokenStarTestClaudePath -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable TokenStarUnexpectedClaudeLaunch -Scope Global -ErrorAction SilentlyContinue
 
     $bridge = Join-Path $RuntimeRoot "token-mass-windows.ps1"
     $generated = Join-Path $RuntimeRoot "supernova-windows.generated.hlsl"
@@ -188,13 +194,14 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $overlayPositionPath)) "saved overlay position was not removed"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "project-scope.json"))) "project scope was not removed"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled"))) "overlay marker was not removed"
+    Assert-True (-not (Test-Path -LiteralPath $RuntimeRoot)) "runtime directory was not removed completely"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $ClaudeSettings) "ghostty-supernova.windows.install.json"))) "install state was not removed"
 
     Write-Output "Windows bridge/install/uninstall integration tests passed."
 }
 finally {
     Remove-Item Function:\global:claude -ErrorAction SilentlyContinue
-    Remove-Variable TokenStarTestClaudePath -Scope Global -ErrorAction SilentlyContinue
+    Remove-Variable TokenStarUnexpectedClaudeLaunch -Scope Global -ErrorAction SilentlyContinue
     Remove-Item Env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS -ErrorAction SilentlyContinue
     Remove-Item Env:GHOSTTY_SUPERNOVA_DISABLE_OVERLAY -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $TemporaryRoot) {

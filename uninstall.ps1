@@ -85,6 +85,13 @@ function Get-VerifiedOverlayProcess {
     return $null
 }
 
+$previewPidPath = Join-Path $PSScriptRoot ".preview-server.pid.json"
+$previewProcess = Get-VerifiedOverlayProcess $previewPidPath
+if ($previewProcess) {
+    Stop-Process -Id $previewProcess.Id -Force -ErrorAction SilentlyContinue
+}
+Remove-Item -LiteralPath $previewPidPath -Force -ErrorAction SilentlyContinue
+
 $state = Read-JsonObject $statePath
 if (@($state.PSObject.Properties).Count -eq 0) {
     Write-Output "Ghostty Supernova for Windows Terminal is not installed."

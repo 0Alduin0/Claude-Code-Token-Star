@@ -4,6 +4,8 @@ param(
     [string]$PositionPath,
     [string]$PidPath,
     [string]$StopPath,
+    [string]$CapturePath,
+    [switch]$CaptureDetails,
     [switch]$SelfTest,
     [switch]$Demo,
     [double]$DemoLevel = -1.0
@@ -116,20 +118,45 @@ public static class TokenStarNative {
       <Rectangle.RenderTransform><RotateTransform Angle="-12" /></Rectangle.RenderTransform>
     </Rectangle>
 
-    <Rectangle Name="NeutronBeamGlow" Width="360" Height="28" RadiusX="12" RadiusY="12" Opacity="0"
-               Fill="#884AA8FF" RenderTransformOrigin="0.5,0.5">
-      <Rectangle.Effect><BlurEffect Radius="6" /></Rectangle.Effect>
+    <Rectangle Name="NeutronBeamAura" Width="410" Height="66" RadiusX="30" RadiusY="30" Opacity="0"
+               RenderTransformOrigin="0.5,0.5">
+      <Rectangle.Fill>
+        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+          <GradientStop Color="#00478EFF" Offset="0" />
+          <GradientStop Color="#995AB8FF" Offset="0.26" />
+          <GradientStop Color="#EEEAFFFF" Offset="0.5" />
+          <GradientStop Color="#995AB8FF" Offset="0.74" />
+          <GradientStop Color="#00478EFF" Offset="1" />
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+      <Rectangle.Effect><BlurEffect Radius="16" /></Rectangle.Effect>
       <Rectangle.RenderTransform><RotateTransform Angle="0" /></Rectangle.RenderTransform>
     </Rectangle>
-    <Rectangle Name="NeutronBeam" Width="350" Height="6" RadiusX="3" RadiusY="3" Opacity="0"
+    <Rectangle Name="NeutronBeamGlow" Width="390" Height="34" RadiusX="15" RadiusY="15" Opacity="0"
+               Fill="#AA4AA8FF" RenderTransformOrigin="0.5,0.5">
+      <Rectangle.Effect><BlurEffect Radius="8" /></Rectangle.Effect>
+      <Rectangle.RenderTransform><RotateTransform Angle="0" /></Rectangle.RenderTransform>
+    </Rectangle>
+    <Rectangle Name="NeutronBeam" Width="382" Height="7" RadiusX="3" RadiusY="3" Opacity="0"
                Fill="#EEEAFFFF" RenderTransformOrigin="0.5,0.5">
       <Rectangle.Effect><BlurEffect Radius="1" /></Rectangle.Effect>
       <Rectangle.RenderTransform><RotateTransform Angle="0" /></Rectangle.RenderTransform>
     </Rectangle>
+    <Rectangle Name="NeutronBeamHot" Width="372" Height="2" RadiusX="1" RadiusY="1" Opacity="0"
+               Fill="#FFFFFFFF" RenderTransformOrigin="0.5,0.5">
+      <Rectangle.RenderTransform><RotateTransform Angle="0" /></Rectangle.RenderTransform>
+    </Rectangle>
 
+    <Path Name="CoronaShellOuter" Opacity="0">
+      <Path.Effect><BlurEffect Radius="7" /></Path.Effect>
+    </Path>
+    <Path Name="CoronaShellInner" Opacity="0">
+      <Path.Effect><BlurEffect Radius="3" /></Path.Effect>
+    </Path>
     <Ellipse Name="Glow" Opacity="0">
       <Ellipse.Effect><BlurEffect Radius="12" /></Ellipse.Effect>
     </Ellipse>
+    <Canvas Name="Prominences" />
     <Ellipse Name="Core" Opacity="0" />
     <Canvas Name="Surface" />
 
@@ -225,9 +252,14 @@ $HaloInner = $Window.FindName("HaloInner")
 $JetAura = $Window.FindName("JetAura")
 $JetGlow = $Window.FindName("JetGlow")
 $JetCore = $Window.FindName("JetCore")
+$NeutronBeamAura = $Window.FindName("NeutronBeamAura")
 $NeutronBeamGlow = $Window.FindName("NeutronBeamGlow")
 $NeutronBeam = $Window.FindName("NeutronBeam")
+$NeutronBeamHot = $Window.FindName("NeutronBeamHot")
+$CoronaShellOuter = $Window.FindName("CoronaShellOuter")
+$CoronaShellInner = $Window.FindName("CoronaShellInner")
 $Glow = $Window.FindName("Glow")
+$Prominences = $Window.FindName("Prominences")
 $Core = $Window.FindName("Core")
 $Surface = $Window.FindName("Surface")
 $DiskGlow = $Window.FindName("DiskGlow")
@@ -249,7 +281,8 @@ $DetailsText = $Window.FindName("DetailsText")
 foreach ($visual in @(
     $Stars, $Nebula, $PulseRingOuter, $PulseRingInner, $Rays, $Particles,
     $HaloOuter, $HaloInner, $JetAura, $JetGlow, $JetCore,
-    $NeutronBeamGlow, $NeutronBeam, $Glow, $Core, $Surface,
+    $NeutronBeamAura, $NeutronBeamGlow, $NeutronBeam, $NeutronBeamHot,
+    $CoronaShellOuter, $CoronaShellInner, $Glow, $Prominences, $Core, $Surface,
     $DiskAura, $DiskOuter, $DiskGlow, $Disk, $DiskHot, $BlackCore,
     $DiskFrontGlow, $DiskFront
 )) {
@@ -276,16 +309,17 @@ for ($index = 0; $index -lt 32; $index++) {
 }
 
 $RayLines = @()
-for ($index = 0; $index -lt 18; $index++) {
+for ($index = 0; $index -lt 48; $index++) {
     $line = New-Object Windows.Shapes.Line
-    $line.StrokeThickness = if ($index % 3 -eq 0) { 2.0 } else { 1.0 }
+    $line.StrokeThickness = if ($index % 12 -eq 0) { 3.2 } elseif ($index % 4 -eq 0) { 1.8 } else { 0.9 }
+    if ($index % 4 -eq 0) { $line.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 2.5 } }
     $line.Opacity = 0.0
     [void]$Rays.Children.Add($line)
     $RayLines += $line
 }
 
 $ParticleDots = @()
-for ($index = 0; $index -lt 36; $index++) {
+for ($index = 0; $index -lt 72; $index++) {
     $dot = New-Object Windows.Shapes.Ellipse
     $size = 1.2 + ($index % 5) * 0.55
     $dot.Width = $size
@@ -296,16 +330,61 @@ for ($index = 0; $index -lt 36; $index++) {
     $ParticleDots += $dot
 }
 
+$SurfaceBands = @()
+for ($index = 0; $index -lt 18; $index++) {
+    $band = New-Object Windows.Shapes.Ellipse
+    $band.Fill = [Windows.Media.Brushes]::Transparent
+    $band.StrokeThickness = 0.8 + ($index % 4) * 0.55
+    $band.StrokeDashArray = New-Object Windows.Media.DoubleCollection
+    foreach ($dash in @(1.0, (2.0 + $index % 3), (5.0 + $index % 5), 2.0)) { [void]$band.StrokeDashArray.Add($dash) }
+    $band.RenderTransformOrigin = New-Object Windows.Point(0.5, 0.5)
+    $band.RenderTransform = New-Object Windows.Media.RotateTransform
+    if ($index % 3 -eq 0) { $band.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.4 } }
+    $band.Opacity = 0.0
+    [void]$Surface.Children.Add($band)
+    $SurfaceBands += $band
+}
+
 $SurfaceDots = @()
-for ($index = 0; $index -lt 10; $index++) {
+$SurfaceSeeds = @()
+for ($index = 0; $index -lt 52; $index++) {
     $spot = New-Object Windows.Shapes.Ellipse
-    $size = 3.0 + ($index % 4) * 1.4
+    $size = 2.0 + $Random.NextDouble() * 6.0
     $spot.Width = $size
-    $spot.Height = $size
+    $spot.Height = $size * (0.55 + $Random.NextDouble() * 0.45)
     $spot.Fill = [Windows.Media.Brushes]::White
     $spot.Opacity = 0.0
+    if ($index % 3 -ne 0) { $spot.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.0 + $Random.NextDouble() * 1.8 } }
     [void]$Surface.Children.Add($spot)
     $SurfaceDots += $spot
+    $SurfaceSeeds += [pscustomobject]@{
+        radius = [Math]::Sqrt($Random.NextDouble())
+        angle = $Random.NextDouble() * 2.0 * [Math]::PI
+        speed = 0.10 + $Random.NextDouble() * 0.28
+        phase = $Random.NextDouble() * 2.0 * [Math]::PI
+    }
+}
+
+$ProminenceRings = @()
+for ($index = 0; $index -lt 9; $index++) {
+    $ring = New-Object Windows.Shapes.Ellipse
+    $ring.Fill = [Windows.Media.Brushes]::Transparent
+    $ring.StrokeThickness = 1.4 + ($index % 3) * 0.8
+    $ring.StrokeDashArray = New-Object Windows.Media.DoubleCollection
+    foreach ($dash in @(
+        (2.0 + ($index % 4)),
+        (3.0 + (($index + 1) % 5)),
+        (8.0 + ($index % 3) * 2.0),
+        4.0
+    )) {
+        [void]$ring.StrokeDashArray.Add($dash)
+    }
+    $ring.RenderTransformOrigin = New-Object Windows.Point(0.5, 0.5)
+    $ring.RenderTransform = New-Object Windows.Media.RotateTransform
+    $ring.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.2 + ($index % 3) }
+    $ring.Opacity = 0.0
+    [void]$Prominences.Children.Add($ring)
+    $ProminenceRings += $ring
 }
 
 function Convert-Color([string]$Value) {
@@ -361,8 +440,30 @@ function Get-Stage([double]$Level) {
 }
 
 function Format-Mass([long]$Tokens) {
-    if ($Tokens -ge 1000) { return "{0:0}" -f ($Tokens / 1000.0) }
-    return [string]$Tokens
+    return "{0:0}K" -f ($Tokens / 1000.0)
+}
+
+function New-CoronaGeometry([double]$Radius, [int]$Points, [double]$Phase, [double]$Turbulence) {
+    $geometry = New-Object Windows.Media.StreamGeometry
+    $context = $geometry.Open()
+    try {
+        for ($index = 0; $index -lt $Points; $index++) {
+            $angle = 2.0 * [Math]::PI * $index / $Points
+            $noise = 0.52 * [Math]::Sin($angle * 11.0 + $Phase) +
+                     0.31 * [Math]::Sin($angle * 19.0 - $Phase * 1.7) +
+                     0.17 * [Math]::Sin($angle * 31.0 + $Phase * 0.63)
+            $cardinal = [Math]::Pow([Math]::Abs([Math]::Cos($angle * 2.0)), 18.0)
+            $radiusAtPoint = $Radius * (1.0 + $Turbulence * $noise + $Turbulence * 1.7 * $cardinal)
+            $pointX = $CenterX + [Math]::Cos($angle) * $radiusAtPoint
+            $pointY = $CenterY + [Math]::Sin($angle) * $radiusAtPoint
+            $point = New-Object Windows.Point($pointX, $pointY)
+            if ($index -eq 0) { $context.BeginFigure($point, $true, $true) }
+            else { $context.LineTo($point, $true, $false) }
+        }
+    }
+    finally { $context.Dispose() }
+    $geometry.Freeze()
+    return $geometry
 }
 
 function Format-TokenDetail([long]$Tokens) {
@@ -417,6 +518,7 @@ $NextStatePoll = 0.0
 $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
 $NextHostRefresh = 0.0
+$NextCoronaUpdate = 0.0
 
 if (Test-Path -LiteralPath $PositionPath) {
     try {
@@ -567,6 +669,7 @@ function Save-WindowPosition {
 
 $OverlayHandle = [IntPtr]::Zero
 $DragHandleActive = $false
+$InteractivePanelActive = $false
 $ClickThroughEnabled = $true
 $DetailsOpen = $false
 $DownArrow = [string][char]0x25BC
@@ -595,6 +698,7 @@ function Update-HitTestMode {
     }
 
     $script:DragHandleActive = $overStar
+    $script:InteractivePanelActive = $overPanel
     $MassPanel.BorderBrush = if ($overPanel) { $HoverPanelBorder } else { $DefaultPanelBorder }
     $shouldClickThrough = -not ($overStar -or $overPanel)
     if ($shouldClickThrough -ne $script:ClickThroughEnabled) {
@@ -674,67 +778,112 @@ function Update-Visual {
     $isQuasar = $stage -eq "QUASAR"
 
     $diameter = switch ($stage) {
-        "RED DWARF" { 54.0 }
-        "MAIN SEQUENCE" { 82.0 }
-        "BLUE GIANT" { 112.0 }
-        "HYPERGIANT" { 142.0 }
-        "NEUTRON STAR" { 28.0 }
+        "RED DWARF" { 68.0 }
+        "MAIN SEQUENCE" { 96.0 }
+        "BLUE GIANT" { 128.0 }
+        "HYPERGIANT" { 158.0 }
+        "NEUTRON STAR" { 42.0 }
         default { 92.0 }
     }
     Set-CenteredSize $DragHandle ([Math]::Max(42.0, $diameter)) ([Math]::Max(42.0, $diameter))
     $colors = switch ($stage) {
-        "RED DWARF" { @("#FFFF5A21", "#00A51005") }
-        "MAIN SEQUENCE" { @("#FFFFD36B", "#00FF6A10") }
-        "BLUE GIANT" { @("#FFB6E0FF", "#003A68FF") }
-        "HYPERGIANT" { @("#FFFFFFB0", "#00FF8A16") }
-        "NEUTRON STAR" { @("#FFDFFFFF", "#003B8CFF") }
-        default { @("#FF000000", "#00000000") }
+        "RED DWARF" { @("#FFFF7A32", "#FF6D0702", "#001D0000") }
+        "MAIN SEQUENCE" { @("#FFFFE89A", "#FFD95A09", "#002E0900") }
+        "BLUE GIANT" { @("#FFE9F7FF", "#FF2768C7", "#000B2D88") }
+        "HYPERGIANT" { @("#FFFFFFD8", "#FFFF8E18", "#003F0B00") }
+        "NEUTRON STAR" { @("#FFFFFFFF", "#FF2B78D4", "#00042A88") }
+        default { @("#FF000000", "#FF000000", "#00000000") }
     }
 
-    Set-CenteredSize $Glow ($diameter * 2.15) ($diameter * 2.15)
+    Set-CenteredSize $Glow ($diameter * $(if ($isNeutron) { 4.8 } else { 2.75 })) ($diameter * $(if ($isNeutron) { 4.8 } else { 2.75 }))
     Set-CenteredSize $Core $diameter $diameter
     $Core.Fill = Get-RadialBrush $colors[0] $colors[1]
-    $Glow.Fill = Get-RadialBrush $colors[0] "#00000000"
+    $Core.Stroke = Get-SolidBrush $(if ($isNeutron) { "#FFFFFFFF" } else { $colors[0] })
+    $Core.StrokeThickness = if ($isNeutron) { 3.0 } else { 0.0 }
+    $Glow.Fill = Get-RadialBrush $colors[0] $colors[2]
     $Core.Opacity = if ($isNormal -or $isNeutron) { 1.0 } else { 0.0 }
-    $Glow.Opacity = if ($isNormal) { 0.58 } elseif ($isNeutron) { 0.88 } else { 0.0 }
+    $Glow.Opacity = if ($isNormal) { 0.76 } elseif ($isNeutron) { 0.96 } else { 0.0 }
 
-    Set-CenteredSize $Nebula ($diameter * 3.35) ($diameter * 3.35)
-    $Nebula.Fill = Get-RadialBrush $colors[0] "#00000000"
-    $Nebula.Opacity = if ($isNormal) { 0.18 + 0.08 * [Math]::Sin($time * 1.7) } elseif ($isNeutron) { 0.28 } else { 0.0 }
+    Set-CenteredSize $Nebula ($diameter * $(if ($isNeutron) { 6.8 } else { 4.2 })) ($diameter * $(if ($isNeutron) { 6.8 } else { 4.2 }))
+    $Nebula.Fill = Get-RadialBrush $colors[0] $colors[2]
+    $Nebula.Opacity = if ($isNormal) { 0.28 + 0.12 * [Math]::Sin($time * 1.7) } elseif ($isNeutron) { 0.42 } else { 0.0 }
+
+    if ($isNormal -and $time -ge $script:NextCoronaUpdate) {
+        $script:NextCoronaUpdate = $time + 0.18
+        $coreRadius = $diameter / 2.0
+        $CoronaShellOuter.Data = New-CoronaGeometry ($coreRadius * 2.18) 96 ($time * 0.72) (0.18 + 0.10 * $level)
+        $CoronaShellInner.Data = New-CoronaGeometry ($coreRadius * 1.48) 96 (-$time * 1.08) (0.13 + 0.08 * $level)
+        $CoronaShellOuter.Fill = Get-RadialBrush $colors[0] $colors[2]
+        $CoronaShellInner.Fill = Get-RadialBrush $colors[0] $colors[2]
+        $CoronaShellOuter.Stroke = Get-SolidBrush $colors[0]
+        $CoronaShellInner.Stroke = Get-SolidBrush $colors[0]
+        $CoronaShellOuter.StrokeThickness = 0.7
+        $CoronaShellInner.StrokeThickness = 1.1
+        $CoronaShellOuter.Opacity = 0.24 + 0.16 * $level
+        $CoronaShellInner.Opacity = 0.38 + 0.22 * $level
+    }
+    elseif (-not $isNormal) {
+        $CoronaShellOuter.Opacity = 0.0
+        $CoronaShellInner.Opacity = 0.0
+    }
 
     $pulse = 0.5 + 0.5 * [Math]::Sin($time * 2.6)
     Set-CenteredSize $PulseRingInner ($diameter * (1.30 + 0.12 * $pulse)) ($diameter * (1.30 + 0.12 * $pulse))
     Set-CenteredSize $PulseRingOuter ($diameter * (1.72 + 0.20 * $pulse)) ($diameter * (1.72 + 0.20 * $pulse))
     $PulseRingInner.Stroke = Get-SolidBrush $colors[0]
     $PulseRingOuter.Stroke = Get-SolidBrush $colors[0]
-    $PulseRingInner.Opacity = if ($isNormal -and -not $isHyper) { 0.34 * (1.0 - $pulse) } else { 0.0 }
-    $PulseRingOuter.Opacity = if ($isNormal -and -not $isHyper) { 0.18 * $pulse } else { 0.0 }
+    $PulseRingInner.Opacity = if ($isNormal) { (0.30 + 0.24 * $level) * (1.0 - $pulse) } else { 0.0 }
+    $PulseRingOuter.Opacity = if ($isNormal) { (0.18 + 0.22 * $level) * $pulse } else { 0.0 }
     $stageBrush = Get-SolidBrush $colors[0]
+    $surfaceAccentColor = switch ($stage) {
+        "RED DWARF" { "#CC3B0000" }
+        "MAIN SEQUENCE" { "#CCFF8A16" }
+        "BLUE GIANT" { "#CC4B8EE8" }
+        "HYPERGIANT" { "#CCFF9A14" }
+        default { "#CC4F9EFF" }
+    }
+    $surfaceAccent = Get-SolidBrush $surfaceAccentColor
+
+    for ($index = 0; $index -lt $SurfaceBands.Count; $index++) {
+        $band = $SurfaceBands[$index]
+        if ($isNormal) {
+            $bandWidth = $diameter * (0.25 + $index * 0.039)
+            $bandHeight = $bandWidth * (0.18 + 0.055 * ($index % 5))
+            Set-CenteredSize $band $bandWidth $bandHeight
+            $band.Stroke = if ($index % 4 -eq 0) { [Windows.Media.Brushes]::White } elseif ($index % 3 -eq 0) { $surfaceAccent } else { $stageBrush }
+            $band.RenderTransform.Angle = ($index * 41.0 + $time * $(if ($index % 2 -eq 0) { 13.0 } else { -9.0 })) % 360.0
+            $band.StrokeDashOffset = $time * $(if ($index % 2 -eq 0) { 7.0 } else { -5.0 }) + $index
+            $band.Opacity = 0.11 + 0.025 * ($index % 6)
+        }
+        else { $band.Opacity = 0.0 }
+    }
 
     $rayRadius = $diameter * 0.52
     for ($index = 0; $index -lt $RayLines.Count; $index++) {
         $angle = $index * (360.0 / $RayLines.Count) + $time * (8.0 + $level * 18.0)
         $radians = $angle * [Math]::PI / 180.0
-        $inner = $rayRadius * 0.90
-        $outer = $rayRadius * (1.12 + 0.58 * (0.5 + 0.5 * [Math]::Sin($time * 2.1 + $index * 1.7)))
+        $inner = $rayRadius * 0.84
+        $flareGain = if ($index % 12 -eq 0) { 3.8 + 1.3 * $level } elseif ($index % 4 -eq 0) { 2.0 + 0.8 * $level } else { 1.25 + 0.75 * $level }
+        $outer = $rayRadius * ($flareGain + 0.42 * [Math]::Sin($time * 2.1 + $index * 1.7))
         $line = $RayLines[$index]
         $line.X1 = $CenterX + [Math]::Cos($radians) * $inner
         $line.Y1 = $CenterY + [Math]::Sin($radians) * $inner
         $line.X2 = $CenterX + [Math]::Cos($radians) * $outer
         $line.Y2 = $CenterY + [Math]::Sin($radians) * $outer
         $line.Stroke = $stageBrush
-        $line.Opacity = if ($isNormal -and -not $isHyper) { 0.28 + 0.36 * $level } else { 0.0 }
+        $line.Opacity = if ($isNormal) { $(if ($index % 12 -eq 0) { 0.68 } elseif ($index % 4 -eq 0) { 0.46 } else { 0.22 + 0.30 * $level }) } else { 0.0 }
     }
 
     for ($index = 0; $index -lt $SurfaceDots.Count; $index++) {
         $spot = $SurfaceDots[$index]
-        if ($isNormal -and -not $isHyper) {
-            $angle = $index * 2.39996 + $time * (0.34 + ($index % 3) * 0.11)
-            $radius = $diameter * (0.10 + 0.31 * (($index % 7) / 7.0))
+        if ($isNormal) {
+            $seed = $SurfaceSeeds[$index]
+            $angle = [double]$seed.angle + $time * [double]$seed.speed
+            $radius = $diameter * 0.43 * [double]$seed.radius
             [Windows.Controls.Canvas]::SetLeft($spot, $CenterX + [Math]::Cos($angle) * $radius - $spot.Width / 2.0)
             [Windows.Controls.Canvas]::SetTop($spot, $CenterY + [Math]::Sin($angle) * $radius - $spot.Height / 2.0)
-            $spot.Fill = $stageBrush
-            $spot.Opacity = 0.18 + 0.34 * (0.5 + 0.5 * [Math]::Sin($time * 2.2 + $index))
+            $spot.Fill = if ($index % 7 -eq 0) { [Windows.Media.Brushes]::White } elseif ($index % 3 -eq 0) { $surfaceAccent } else { $stageBrush }
+            $spot.Opacity = 0.07 + 0.24 * (0.5 + 0.5 * [Math]::Sin($time * 1.7 + [double]$seed.phase))
         }
         else { $spot.Opacity = 0.0 }
     }
@@ -744,13 +893,42 @@ function Update-Visual {
     $HaloInner.Opacity = if ($isHyper) { 0.88 } else { 0.0 }
     $HaloOuter.Opacity = if ($isHyper) { 0.62 } else { 0.0 }
 
-    Set-CenteredSize $NeutronBeamGlow 360 28
-    Set-CenteredSize $NeutronBeam 350 6
+    for ($index = 0; $index -lt $ProminenceRings.Count; $index++) {
+        $ring = $ProminenceRings[$index]
+        if ($isNormal) {
+            $ringWidth = $diameter * (1.16 + $index * 0.10)
+            $ringHeight = $ringWidth * (0.54 + 0.055 * ($index % 4))
+            Set-CenteredSize $ring $ringWidth $ringHeight
+            $ring.Stroke = $stageBrush
+            $ring.RenderTransform.Angle = ($index * 37.0 + $time * $(if ($index % 2 -eq 0) { 9.0 } else { -6.0 })) % 360.0
+            $ring.StrokeDashOffset = $time * $(if ($index % 2 -eq 0) { 3.5 } else { -2.8 })
+            $ring.Opacity = 0.16 + 0.055 * $index + $(if ($isHyper) { 0.18 } else { 0.0 })
+        }
+        elseif ($isNeutron) {
+            $ringWidth = 102.0 + $index * 15.0
+            $ringHeight = 32.0 + ($index % 4) * 13.0
+            Set-CenteredSize $ring $ringWidth $ringHeight
+            $ring.Stroke = Get-SolidBrush $(if ($index % 3 -eq 0) { "#FFD9FAFF" } elseif ($index % 3 -eq 1) { "#FF4FB9FF" } else { "#FF916BFF" })
+            $ring.RenderTransform.Angle = ($index * 29.0 + $time * $(if ($index % 2 -eq 0) { 82.0 } else { -64.0 })) % 360.0
+            $ring.StrokeDashOffset = $time * $(if ($index % 2 -eq 0) { 18.0 } else { -15.0 })
+            $ring.Opacity = 0.30 + 0.055 * $index
+        }
+        else { $ring.Opacity = 0.0 }
+    }
+
+    Set-CenteredSize $NeutronBeamAura 410 66
+    Set-CenteredSize $NeutronBeamGlow 390 34
+    Set-CenteredSize $NeutronBeam 382 7
+    Set-CenteredSize $NeutronBeamHot 372 2
     $NeutronAngle = ($time * 572.9578) % 360.0
+    $NeutronBeamAura.RenderTransform.Angle = $NeutronAngle
     $NeutronBeam.RenderTransform.Angle = $NeutronAngle
     $NeutronBeamGlow.RenderTransform.Angle = $NeutronAngle
+    $NeutronBeamHot.RenderTransform.Angle = $NeutronAngle
+    $NeutronBeamAura.Opacity = if ($isNeutron) { 0.46 + 0.18 * [Math]::Sin($time * 16.0) } else { 0.0 }
     $NeutronBeam.Opacity = if ($isNeutron) { 1.0 } else { 0.0 }
     $NeutronBeamGlow.Opacity = if ($isNeutron) { 0.92 } else { 0.0 }
+    $NeutronBeamHot.Opacity = if ($isNeutron) { 1.0 } else { 0.0 }
 
     Set-CenteredSize $JetAura 94 360
     Set-CenteredSize $JetGlow 46 350
@@ -784,18 +962,18 @@ function Update-Visual {
     for ($index = 0; $index -lt $ParticleDots.Count; $index++) {
         $dot = $ParticleDots[$index]
         $dot.Opacity = 0.0
-        if ($isNormal -and -not $isHyper) {
+        if ($isNormal) {
             $travel = ($time * (0.16 + ($index % 5) * 0.018) + $index * 0.6180339) % 1.0
             $angle = $index * 2.39996 + $time * (0.16 + $level * 0.25)
-            $radius = $diameter * (0.54 + 1.20 * $travel)
+            $radius = $diameter * (0.50 + 1.85 * $travel)
             [Windows.Controls.Canvas]::SetLeft($dot, $CenterX + [Math]::Cos($angle) * $radius - $dot.Width / 2.0)
             [Windows.Controls.Canvas]::SetTop($dot, $CenterY + [Math]::Sin($angle) * $radius - $dot.Height / 2.0)
             $dot.Fill = $stageBrush
-            $dot.Opacity = (1.0 - $travel) * (0.30 + 0.45 * $level)
+            $dot.Opacity = (1.0 - $travel) * (0.38 + 0.55 * $level)
         }
-        elseif ($isNeutron -and $index -lt 20) {
-            $travel = ($time * (1.8 + ($index % 4) * 0.13) + $index / 20.0) % 1.0
-            $distance = ($travel - 0.5) * 340.0
+        elseif ($isNeutron -and $index -lt 48) {
+            $travel = ($time * (1.8 + ($index % 4) * 0.13) + $index / 48.0) % 1.0
+            $distance = ($travel - 0.5) * 390.0
             $radians = $NeutronAngle * [Math]::PI / 180.0
             $jitter = [Math]::Sin($time * 18.0 + $index) * 2.5
             $x = $CenterX + [Math]::Cos($radians) * $distance - [Math]::Sin($radians) * $jitter
@@ -876,7 +1054,7 @@ $Window.Add_SourceInitialized({
         param($hwnd, $message, $wParam, $lParam, [ref]$handled)
         if ($message -eq 0x0084) {
             $handled.Value = $true
-            if ($script:DragHandleActive) { return [IntPtr]1 }
+            if ($script:DragHandleActive -or $script:InteractivePanelActive) { return [IntPtr]1 }
             return [IntPtr](-1)
         }
         if ($message -eq 0x0232) {
@@ -897,6 +1075,35 @@ if ($SelfTest) {
     }
     if (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - OtherProject - PyCharm" })) {
         throw "Token Star overlay project-title isolation self-test failed."
+    }
+    $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
+    if (-not $script:DetailsOpen -or $DetailsPanel.Visibility -ne "Visible") {
+        throw "Token Star overlay details dropdown self-test failed."
+    }
+    if (-not $CaptureDetails) {
+        $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CapturePath)) {
+        Start-Sleep -Milliseconds 420
+        Update-Visual
+        $captureFullPath = [IO.Path]::GetFullPath($CapturePath)
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $captureFullPath)) | Out-Null
+        $captureBackground = $Root.Background
+        try {
+            $Root.Background = Get-SolidBrush "#FF070B12"
+            $Root.Measure((New-Object Windows.Size(500, 500)))
+            $Root.Arrange((New-Object Windows.Rect(0, 0, 500, 500)))
+            $Root.UpdateLayout()
+            $bitmap = New-Object Windows.Media.Imaging.RenderTargetBitmap(500, 500, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+            $bitmap.Render($Root)
+            $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder
+            $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
+            $stream = [IO.File]::Open($captureFullPath, [IO.FileMode]::Create)
+            try { $encoder.Save($stream) }
+            finally { $stream.Dispose() }
+        }
+        finally { $Root.Background = $captureBackground }
+        Write-Output "Captured $captureFullPath"
     }
     Write-Output "Token Star overlay self-test OK"
     if ($CreatedNew) { $OverlayMutex.ReleaseMutex() }

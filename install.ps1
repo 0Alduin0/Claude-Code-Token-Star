@@ -252,7 +252,11 @@ Set-ObjectProperty $state "project_path" $ProjectPath
 Set-ObjectProperty $state "overlay_enabled" $true
 
 Remove-HookCommands $settings $commandsToReplace
-Set-ObjectProperty $settings "statusLine" ([pscustomobject]@{ type = "command"; command = $command })
+Set-ObjectProperty $settings "statusLine" ([pscustomobject]@{
+    type = "command"
+    command = $command
+    refreshInterval = 1
+})
 $hooksProperty = $settings.PSObject.Properties["hooks"]
 if ($null -eq $hooksProperty) {
     $hooks = [pscustomobject]@{}
@@ -310,10 +314,6 @@ if (-not $TerminalSettings) {
     Write-Output "Windows Terminal not found; skipped reload integration. The IDE overlay is fully available."
 }
 if (-not $NoLaunch) {
-    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-        throw "Claude Code command ('claude') was not found in PATH."
-    }
-
     if ($env:GHOSTTY_SUPERNOVA_DISABLE_OVERLAY -ne "1" -and -not (Get-VerifiedOverlayProcess (Join-Path $RuntimeRoot "token-star-overlay.pid.json"))) {
         Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList @(
             "-NoLogo", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass",
@@ -324,12 +324,8 @@ if (-not $NoLaunch) {
             "-PositionPath", ('"' + (Join-Path $RuntimeRoot "overlay-position.json") + '"')
         ) | Out-Null
     }
-
-    Write-Output "Overlay is running. Starting Claude in this terminal: $ProjectPath"
-    Push-Location -LiteralPath $ProjectPath
-    try { & claude }
-    finally { Pop-Location }
+    Write-Output "Overlay is ready. The currently running Claude session will attach on its next status refresh."
 }
 else {
-    Write-Output "Automatic overlay/Claude launch skipped."
+    Write-Output "Automatic overlay launch skipped. No new Claude session was started."
 }

@@ -12,7 +12,11 @@
     header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 0 0 14px; }
     h1 { font: 600 20px/1.1 system-ui, sans-serif; margin: 0 0 4px; }
     p { color: #8091a5; font-size: 12px; margin: 0; }
-    .readout { color: #b9d8ff; text-align: right; font-size: 12px; }
+    .readout { color: #b9d8ff; text-align: right; font-size: 12px; position: relative; }
+    .usage-toggle { color: #eef8ff; background: #050a11ee; border-color: #456b91; font-weight: 700; }
+    .usage-toggle:hover, .usage-toggle[aria-expanded="true"] { border-color: #b9e4ff; background: #0d1b29; }
+    .usage-details { position: absolute; z-index: 3; right: 0; top: 38px; min-width: 260px; padding: 10px 12px; border: 1px solid #456b91; border-radius: 7px; background: #050a11f5; color: #dceeff; text-align: left; line-height: 1.55; box-shadow: 0 16px 40px #000c; white-space: pre; }
+    .usage-details[hidden] { display: none; }
     .ok { color: #75d79c; }
     canvas { width: 100%; aspect-ratio: 16/9; background: #070b12; border: 1px solid #1d2a3a; border-radius: 12px; display: block; box-shadow: 0 24px 80px #000a; cursor: grab; touch-action: none; }
     canvas.dragging { cursor: grabbing; }
@@ -33,7 +37,23 @@
         <h1>Ghostty Supernova</h1>
         <p>Choose a stage, then drag the object anywhere on the canvas.</p>
       </div>
-      <div class="readout"><span id="mass">MASS 164K</span><br><span id="stage">NEUTRON STAR</span><br><span id="compile">COMPILING…</span></div>
+      <div class="readout">
+        <button class="usage-toggle" id="usage-toggle" type="button" aria-expanded="false">
+          <span id="mass">MASS 164K</span> | 5H %61 | 2h 23m <span id="usage-arrow">&#x25BC;</span>
+        </button>
+        <div class="usage-details" id="usage-details" hidden>CONTEXT 82%
+Total input       164,000
+Fresh input        42,000
+Cache creation     51,000
+Cache read         71,000
+Last output         3,210
+Remaining          36,000
+
+5-hour limit          %61
+Resets in          2h 23m
+7-day limit           %28</div>
+        <div><span id="stage">NEUTRON STAR</span> · <span id="compile">COMPILING...</span></div>
+      </div>
     </header>
     <canvas id="view" width="1280" height="720"></canvas>
     <div class="controls">
@@ -54,6 +74,16 @@
     const errorOut = document.querySelector('#error');
     const gl = canvas.getContext('webgl2', {antialias: false, alpha: false});
     if (!gl) throw new Error('WebGL 2 is required.');
+
+    const usageToggle = document.querySelector('#usage-toggle');
+    const usageDetails = document.querySelector('#usage-details');
+    const usageArrow = document.querySelector('#usage-arrow');
+    usageToggle.addEventListener('click', () => {
+      const open = usageToggle.getAttribute('aria-expanded') !== 'true';
+      usageToggle.setAttribute('aria-expanded', String(open));
+      usageDetails.hidden = !open;
+      usageArrow.textContent = open ? '\u25B2' : '\u25BC';
+    });
 
     const stages = [
       [.15, 'RED DWARF'], [.35, 'MAIN SEQUENCE'], [.55, 'BLUE GIANT'],
@@ -240,7 +270,7 @@
       const level = Number(slider.value) / 100;
       const tokens = Math.round(level * 200000);
       stageOut.textContent = `${Math.round(level*100)}% · ${stageName(level)}`;
-      massOut.textContent = `MASS ${Math.round(tokens/1000)}`;
+      massOut.textContent = `MASS ${Math.round(tokens/1000)}K`;
       stageButtons.forEach(button => button.classList.toggle(
         'active', stageName(Number(button.dataset.level) / 100) === stageName(level)
       ));
