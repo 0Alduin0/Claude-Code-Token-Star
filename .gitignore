@@ -15,4 +15,5 @@ project-scope.json
 *.ghostty-supernova.tmp
 *.mp4
 *.mov
+*.tgz
 .DS_Store

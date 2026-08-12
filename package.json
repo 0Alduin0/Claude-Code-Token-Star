@@ -1,10 +1,68 @@
 {
-  "name": "ghostty-supernova-dev",
-  "private": true,
+  "name": "claude-token-star",
+  "version": "2.6.0",
+  "description": "Live star overlay that visualizes Claude Code context usage.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "claude-token-star": "bin/claude-token-star.mjs"
+  },
+  "files": [
+    "bin/",
+    "claude-settings.example.json",
+    "claude-settings.windows.example.json",
+    "install.cmd",
+    "install.ps1",
+    "install.sh",
+    "LICENSE",
+    "preview.html",
+    "preview.ps1",
+    "README.md",
+    "supernova.glsl",
+    "supernova-windows.hlsl",
+    "THIRD_PARTY_NOTICES.md",
+    "token-mass.py",
+    "token-mass-windows.ps1",
+    "token-star-overlay.ps1",
+    "token-test.cmd",
+    "token-test.ps1",
+    "token-test.sh",
+    "uninstall.cmd",
+    "uninstall.ps1",
+    "uninstall.sh",
+    "VERSION"
+  ],
   "scripts": {
-    "test": "node tests/compile-shader.mjs",
+    "test": "npm run test:cli && npm run test:shader",
+    "test:cli": "node tests/test-cli.mjs",
+    "test:shader": "node tests/compile-shader.mjs",
     "test:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test-windows.ps1",
     "test:hlsl": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/compile-hlsl.ps1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0Alduin0/Claude-Code-Token-Star.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0Alduin0/Claude-Code-Token-Star/issues"
+  },
+  "homepage": "https://github.com/0Alduin0/Claude-Code-Token-Star#readme",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "anthropic",
+    "developer-tools",
+    "overlay",
+    "powershell",
+    "ghostty",
+    "glsl",
+    "ai-coding"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@webgpu/glslang": "0.0.15"
