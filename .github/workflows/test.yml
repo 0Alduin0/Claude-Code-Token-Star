@@ -35,6 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - shell: powershell
-        run: .\tests\test-windows.ps1
+        run: |
+          try {
+            .\tests\test-windows.ps1
+          }
+          catch {
+            $message = $_.Exception.Message.Replace("`r", " ").Replace("`n", " ")
+            Write-Output "::error title=Windows integration test::$message"
+            throw
+          }
       - shell: powershell
         run: .\tests\compile-hlsl.ps1
