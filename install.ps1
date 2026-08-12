@@ -158,6 +158,10 @@ $TerminalSettings = Find-TerminalSettings
 $ClaudeSettings = [System.IO.Path]::GetFullPath($ClaudeSettings)
 $RuntimeRoot = [System.IO.Path]::GetFullPath($RuntimeRoot)
 $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
+if (-not $PSBoundParameters.ContainsKey("ProjectPath") -and
+    (Split-Path -Leaf $ProjectPath) -eq ".claude-token-star") {
+    $ProjectPath = Split-Path -Parent $ProjectPath
+}
 if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
     throw "Project directory was not found: $ProjectPath"
 }
@@ -255,7 +259,7 @@ Remove-HookCommands $settings $commandsToReplace
 Set-ObjectProperty $settings "statusLine" ([pscustomobject]@{
     type = "command"
     command = $command
-    refreshInterval = 1
+    refreshInterval = 5
 })
 $hooksProperty = $settings.PSObject.Properties["hooks"]
 if ($null -eq $hooksProperty) {

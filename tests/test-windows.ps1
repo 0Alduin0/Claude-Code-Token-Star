@@ -92,7 +92,7 @@ try {
     Assert-True (@($settings.hooks.SessionStart).Count -eq 1) "SessionStart hook was duplicated"
     Assert-True (@($settings.hooks.SessionEnd).Count -eq 1) "SessionEnd hook was duplicated"
     Assert-True ($settings.statusLine.command -match "token-mass-windows\.ps1") "statusLine bridge missing"
-    Assert-True ([int]$settings.statusLine.refreshInterval -eq 1) "statusLine does not attach promptly to a running Claude session"
+    Assert-True ([int]$settings.statusLine.refreshInterval -eq 5) "statusLine refresh interval is unsafe for the PowerShell bridge"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "profile.json")) "Terminal fragment missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "token-star-overlay.ps1")) "IDE overlay missing"
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) "overlay enable marker missing"
@@ -182,6 +182,23 @@ try {
     Assert-True (-not [bool]$overlayState.active) "SessionEnd did not disable the overlay"
     $overlayPositionPath = Join-Path $RuntimeRoot "overlay-position.json"
     [System.IO.File]::WriteAllText($overlayPositionPath, '{"x":0.5,"y":0.5}', $Utf8NoBom)
+
+    # Running install from inside the hidden clone must scope its parent project.
+    $installProject = Join-Path $TemporaryRoot "InstallFromProject"
+    $hiddenClone = Join-Path $installProject ".claude-token-star"
+    [System.IO.Directory]::CreateDirectory($hiddenClone) | Out-Null
+    Push-Location -LiteralPath $hiddenClone
+    try {
+        & (Join-Path $Root "install.ps1") `
+            -ClaudeSettings $ClaudeSettings `
+            -TerminalSettings $TerminalSettings `
+            -RuntimeRoot $RuntimeRoot `
+            -SkipVersionCheck `
+            -NoLaunch | Out-Null
+    }
+    finally { Pop-Location }
+    $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
+    Assert-True ($projectScope.root -eq $installProject) "hidden clone was incorrectly used as the project scope"
 
     & (Join-Path $Root "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
