@@ -11,6 +11,12 @@ Claude Code sends its status-line data to a small local bridge. The bridge
 updates the star without making extra API calls or using extra tokens. The
 installation is scoped to the project where you run it.
 
+### Quasar in motion
+
+<p align="center">
+  <img src="assets/quasar-in-motion.gif" width="500" alt="Animated quasar with a rotating accretion disk and pulsing relativistic jets">
+</p>
+
 ## Star stages
 
 | | |
@@ -19,11 +25,6 @@ installation is scoped to the project where you run it.
 | **Blue Giant · 35–55%**<br><img src="assets/overlay-blue-giant.png" width="420" alt="Blue Giant"> | **Hypergiant · 55–75%**<br><img src="assets/overlay-hypergiant.png" width="420" alt="Hypergiant"> |
 | **Neutron Star · 75–90%**<br><img src="assets/overlay-neutron-star.png" width="420" alt="Neutron Star"> | **Quasar · 90–100%**<br><img src="assets/overlay-quasar.png" width="420" alt="Quasar"> |
 
-### Quasar in motion
-
-<p align="center">
-  <img src="assets/quasar-in-motion.gif" width="500" alt="Animated quasar with a rotating accretion disk and pulsing relativistic jets">
-</p>
 
 ## Platform support
 
