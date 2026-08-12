@@ -7,13 +7,23 @@
 Live star overlay that visualizes Claude Code context usage — six stellar
 stages from red dwarf to quasar.
 
-<p align="center">
-  <img src="assets/star-evolution.gif" width="500" alt="Claude Code context usage evolving from a red dwarf to a quasar">
-</p>
-
 Claude Code sends its status-line data to a small local bridge. The bridge
 updates the star without making extra API calls or using extra tokens. The
 installation is scoped to the project where you run it.
+
+## Star stages
+
+| | |
+| --- | --- |
+| **Red Dwarf · 0–15%**<br><img src="assets/overlay-red-dwarf.png" width="420" alt="Red Dwarf"> | **Main Sequence · 15–35%**<br><img src="assets/overlay-main-sequence.png" width="420" alt="Main Sequence"> |
+| **Blue Giant · 35–55%**<br><img src="assets/overlay-blue-giant.png" width="420" alt="Blue Giant"> | **Hypergiant · 55–75%**<br><img src="assets/overlay-hypergiant.png" width="420" alt="Hypergiant"> |
+| **Neutron Star · 75–90%**<br><img src="assets/overlay-neutron-star.png" width="420" alt="Neutron Star"> | **Quasar · 90–100%**<br><img src="assets/overlay-quasar.png" width="420" alt="Quasar"> |
+
+### Quasar in motion
+
+<p align="center">
+  <img src="assets/quasar-in-motion.gif" width="500" alt="Animated quasar with a rotating accretion disk and pulsing relativistic jets">
+</p>
 
 ## Platform support
 
@@ -94,28 +104,6 @@ On Linux or macOS:
 ```sh
 ./.claude-token-star/token-test.sh sweep
 ```
-
-## Star stages
-
-| Context used | Stage |
-| --- | --- |
-| 0–15% | Red Dwarf |
-| 15–35% | Main Sequence |
-| 35–55% | Blue Giant |
-| 55–75% | Hypergiant |
-| 75–90% | Neutron Star |
-| 90–100% | Quasar |
-
-<details>
-<summary>View all stage screenshots</summary>
-
-| | |
-| --- | --- |
-| **Red Dwarf · 0–15%**<br><img src="assets/overlay-red-dwarf.png" width="420" alt="Red Dwarf"> | **Main Sequence · 15–35%**<br><img src="assets/overlay-main-sequence.png" width="420" alt="Main Sequence"> |
-| **Blue Giant · 35–55%**<br><img src="assets/overlay-blue-giant.png" width="420" alt="Blue Giant"> | **Hypergiant · 55–75%**<br><img src="assets/overlay-hypergiant.png" width="420" alt="Hypergiant"> |
-| **Neutron Star · 75–90%**<br><img src="assets/overlay-neutron-star.png" width="420" alt="Neutron Star"> | **Quasar · 90–100%**<br><img src="assets/overlay-quasar.png" width="420" alt="Quasar"> |
-
-</details>
 
 ## Browser preview
 
