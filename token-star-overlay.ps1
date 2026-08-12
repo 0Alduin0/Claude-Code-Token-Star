@@ -214,21 +214,26 @@ public static class TokenStarNative {
     </Path>
 
     <Ellipse Name="DragHandle" Width="92" Height="92" Fill="#01000000"
-             Cursor="SizeAll" ToolTip="Drag the token star" />
+             Cursor="SizeAll" />
 
     <Border Name="MassPanel" Background="#F203060C" BorderBrush="#CC5F91BF"
             BorderThickness="1" CornerRadius="4" Padding="8,4" Opacity="0">
-      <StackPanel Orientation="Horizontal">
-        <TextBlock Name="MassText" Text="MASS 0" Foreground="#FFF8FCFF"
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="32" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Name="MassText" Text="MASS 0K" Foreground="#FFF8FCFF"
                    FontFamily="Consolas" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" />
-        <TextBlock Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
-                   FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="5,0,0,0" />
-        <Button Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
+        <TextBlock Grid.Column="1" Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
+                   FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="5,0,5,0" />
+        <Button Grid.Column="2" Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
                 Foreground="#FFFFFFFF" Background="#FF14283B" BorderBrush="#FF527CA4"
-                BorderThickness="1,0,0,0" MinWidth="30" FontWeight="Bold"
-                FontSize="14" Padding="7,0" Margin="7,-4,-8,-4"
+                BorderThickness="1,0,0,0" MinWidth="32" FontWeight="Bold"
+                FontSize="14" Padding="7,0" Margin="0,-4,-8,-4"
                 Cursor="Hand" Focusable="False" />
-      </StackPanel>
+      </Grid>
     </Border>
     <Border Name="DetailsPanel" Width="250" Background="#F203060C" BorderBrush="#AA4C7199"
             BorderThickness="1" CornerRadius="4" Padding="10,8" Opacity="0"
@@ -1051,9 +1056,9 @@ function Update-Visual {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
         $RateText.Text = " | $rateSummary"
+        $MassPanel.Width = [double]::NaN
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
         $panelWidth = [Math]::Max(112.0, $MassPanel.DesiredSize.Width)
-        $MassPanel.Width = $panelWidth
         $panelLeft = $CenterX - $panelWidth / 2.0 - $(if ($isQuasar) { 100 } else { 0 })
         $panelTop = $CenterY + [Math]::Max(58.0, $diameter * 0.70)
         [Windows.Controls.Canvas]::SetLeft($MassPanel, $panelLeft)
