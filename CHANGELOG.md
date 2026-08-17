@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Added persistent automatic/fixed stellar-stage selection, including the
+  option to keep a single stage such as Quasar visible for the whole session.
+- Added an optional token-driven growth toggle for scaling the selected star
+  as context usage rises.
+- Added active Claude model and effort metadata plus used/available context
+  counts to the overlay and cross-platform status-line output.
 - Isolated Windows settings, runtimes, overlay processes, and Terminal profiles
   per project so installing or uninstalling one project cannot affect another.
 - Added `python` fallback discovery for `doctor`, `sweep`, and `off` when

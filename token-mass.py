@@ -175,15 +175,32 @@ def compact_number(value: int) -> str:
 
 
 def status_line(data: dict, level: float, used_tokens: int) -> str:
+    context_data = data.get("context_window") if isinstance(data, dict) else {}
+    window_size = (
+        context_data.get("context_window_size")
+        if isinstance(context_data, dict)
+        else None
+    )
+    mass_usage = compact_number(used_tokens)
+    if finite_number(window_size) and float(window_size) > 0:
+        mass_usage += f" / {compact_number(round(float(window_size)))}"
     parts = [
-        f"* MASS {compact_number(used_tokens)} TOKENS",
+        f"* MASS {mass_usage} TOKENS",
         f"{level * 100:.0f}%",
         stage_name(level),
     ]
     model_data = data.get("model") if isinstance(data, dict) else {}
-    model = model_data.get("display_name") if isinstance(model_data, dict) else None
+    model = (
+        model_data.get("display_name") or model_data.get("id")
+        if isinstance(model_data, dict)
+        else None
+    )
     if model:
         parts.append(str(model))
+    effort_data = data.get("effort") if isinstance(data, dict) else {}
+    effort = effort_data.get("level") if isinstance(effort_data, dict) else None
+    if effort:
+        parts.append(f"{str(effort).upper()} effort")
     return "\033[2m" + " · ".join(parts) + "\033[0m"
 
 

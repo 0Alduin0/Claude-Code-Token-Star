@@ -141,6 +141,12 @@ function Get-ContextStats {
     $rateLimits = Get-ObjectProperty $Data "rate_limits"
     $fiveHour = Get-ObjectProperty $rateLimits "five_hour"
     $sevenDay = Get-ObjectProperty $rateLimits "seven_day"
+    $modelData = Get-ObjectProperty $Data "model"
+    $model = Get-ObjectProperty $modelData "display_name"
+    if ([string]::IsNullOrWhiteSpace([string]$model)) {
+        $model = Get-ObjectProperty $modelData "id"
+    }
+    $effort = Get-ObjectProperty (Get-ObjectProperty $Data "effort") "level"
 
     $window = [Math]::Max(0.0, (Get-NumberValue $windowRaw 0.0))
     $hasTokens = $null -ne $tokensRaw
@@ -176,6 +182,8 @@ function Get-ContextStats {
         FiveHourResetsAt = [long][Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $fiveHour "resets_at") 0.0))
         SevenDayUsed = Get-NumberValue (Get-ObjectProperty $sevenDay "used_percentage") -1.0
         SevenDayResetsAt = [long][Math]::Max(0.0, (Get-NumberValue (Get-ObjectProperty $sevenDay "resets_at") 0.0))
+        Model = if ($model) { [string]$model } else { "" }
+        Effort = if ($effort) { [string]$effort } else { "" }
     }
 }
 
@@ -221,13 +229,15 @@ function Write-TokenState {
         }
     }
     $state = [ordered]@{
-        schema = 1
+        schema = 2
         level = $safeLevel
         tokens = [Math]::Max(0L, $UsedTokens)
         active = $Active
         stage = Get-StageName $safeLevel
         project_root = if ($scope) { [string]$scope.root } else { "" }
         project_name = if ($scope) { [string]$scope.name } else { "" }
+        model = if ($Breakdown) { [string](Get-ObjectProperty $Breakdown "Model") } else { "" }
+        effort = if ($Breakdown) { [string](Get-ObjectProperty $Breakdown "Effort") } else { "" }
         breakdown = $details
         rate_limits = $rateLimits
         updated_utc = [DateTime]::UtcNow.ToString("o", $Invariant)
@@ -421,7 +431,7 @@ if ($eventName -eq "SessionEnd") {
     exit 0
 }
 if ($eventName -eq "SessionStart") {
-    Write-ShaderState 0.0 0 $true
+    Write-ShaderState 0.0 0 $true (Get-ContextStats $data)
     exit 0
 }
 
@@ -429,12 +439,18 @@ $stats = Get-ContextStats $data
 $contextLevel = [double]$stats.Level
 $usedTokens = [long]$stats.Tokens
 Write-ShaderState $contextLevel $usedTokens $true $stats
+$massUsage = Format-TokenCount $usedTokens
+if ([long]$stats.WindowSize -gt 0) {
+    $massUsage += " / $(Format-TokenCount ([long]$stats.WindowSize))"
+}
 $parts = @(
-    "* MASS $(Format-TokenCount $usedTokens) TOKENS",
+    "* MASS $massUsage TOKENS",
     "$([Math]::Round($contextLevel * 100))%",
     (Get-StageName $contextLevel)
 )
-$model = Get-ObjectProperty (Get-ObjectProperty $data "model") "display_name"
-if ($model) { $parts += [string]$model }
+$model = [string]$stats.Model
+if ($model) { $parts += $model }
+$effort = [string]$stats.Effort
+if ($effort) { $parts += ($effort.ToUpperInvariant() + " effort") }
 $escape = [char]27
 Write-Output ($escape + "[2m" + ($parts -join " - ") + $escape + "[0m")

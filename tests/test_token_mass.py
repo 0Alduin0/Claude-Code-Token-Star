@@ -116,12 +116,18 @@ class PresentationTests(unittest.TestCase):
             with self.subTest(level=level):
                 self.assertEqual(token_mass.stage_name(level), stage)
 
-    def test_status_line_contains_only_token_context_and_model_fields(self) -> None:
-        data = {"model": {"display_name": "Demo Model"}, "tests": "passed", "diff": 42}
+    def test_status_line_contains_only_session_fields(self) -> None:
+        data = {
+            "model": {"display_name": "Demo Model"},
+            "effort": {"level": "xhigh"},
+            "context_window": {"context_window_size": 1_000_000},
+            "tests": "passed",
+            "diff": 42,
+        }
         line = token_mass.status_line(data, 0.99, 198_000)
         self.assertEqual(
             line,
-            "\x1b[2m* MASS 198.0K TOKENS · 99% · QUASAR · Demo Model\x1b[0m",
+            "\x1b[2m* MASS 198.0K / 1.00M TOKENS · 99% · QUASAR · Demo Model · XHIGH effort\x1b[0m",
         )
         self.assertNotIn("passed", line)
         self.assertNotIn("42", line)
@@ -130,6 +136,12 @@ class PresentationTests(unittest.TestCase):
         self.assertEqual(token_mass.compact_number(999), "999")
         self.assertEqual(token_mass.compact_number(1_000), "1.0K")
         self.assertEqual(token_mass.compact_number(1_250_000), "1.25M")
+
+    def test_status_line_falls_back_to_model_id(self) -> None:
+        line = token_mass.status_line(
+            {"model": {"id": "claude-opus-demo"}}, 0.10, 20_000
+        )
+        self.assertIn("claude-opus-demo", line)
 
 
 class TerminalTransportTests(unittest.TestCase):
@@ -331,7 +343,7 @@ class MainTests(unittest.TestCase):
         )
         self.assertEqual(len(emitted), 1)
         self.assertEqual(len(emitted[0]), 26)
-        self.assertIn("MASS 198.0K TOKENS · 99% · QUASAR · Demo Model", output)
+        self.assertIn("MASS 198.0K / 200.0K TOKENS · 99% · QUASAR · Demo Model", output)
 
     def test_session_lifecycle_events(self) -> None:
         start_output, start_packets = self.run_main({"hook_event_name": "SessionStart"})

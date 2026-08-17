@@ -245,13 +245,36 @@ public static class TokenStarNative {
                 Cursor="Hand" Focusable="False" />
       </Grid>
     </Border>
-    <Border Name="DetailsPanel" Width="218" Background="#F203060C" BorderBrush="#AA4C7199"
+    <Border Name="DetailsPanel" Width="282" Background="#F203060C" BorderBrush="#AA4C7199"
             BorderThickness="1" CornerRadius="4" Padding="8,6" Opacity="0"
             Visibility="Collapsed">
       <StackPanel>
         <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Consolas"
                    FontSize="11" LineHeight="15" />
         <Border Height="1" Background="#664C7199" Margin="0,6,0,5" />
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="82" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0" Text="STAR STAGE" Foreground="#FFA9C4DF"
+                     FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" />
+          <ComboBox Grid.Column="1" Name="StageModeComboBox" Height="24"
+                    Foreground="#FF102030" Background="#FFF4F8FC" BorderBrush="#FF527CA4"
+                    FontFamily="Consolas" FontSize="10" Cursor="Hand" Focusable="False">
+            <ComboBoxItem Content="Auto (token based)" Tag="AUTO" />
+            <ComboBoxItem Content="Red Dwarf" Tag="RED DWARF" />
+            <ComboBoxItem Content="Main Sequence" Tag="MAIN SEQUENCE" />
+            <ComboBoxItem Content="Blue Giant" Tag="BLUE GIANT" />
+            <ComboBoxItem Content="Hypergiant" Tag="HYPERGIANT" />
+            <ComboBoxItem Content="Neutron Star" Tag="NEUTRON STAR" />
+            <ComboBoxItem Content="Quasar" Tag="QUASAR" />
+          </ComboBox>
+        </Grid>
+        <CheckBox Name="GrowWithTokensCheckBox" Content="Grow with token usage"
+                  Foreground="#FFE8F4FF" FontFamily="Consolas" FontSize="10"
+                  Margin="0,5,0,0" Cursor="Hand" Focusable="False" />
+        <Border Height="1" Background="#664C7199" Margin="0,5,0,5" />
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -320,6 +343,8 @@ $RateText = $Window.FindName("RateText")
 $DetailsButton = $Window.FindName("DetailsButton")
 $DetailsPanel = $Window.FindName("DetailsPanel")
 $DetailsText = $Window.FindName("DetailsText")
+$StageModeComboBox = $Window.FindName("StageModeComboBox")
+$GrowWithTokensCheckBox = $Window.FindName("GrowWithTokensCheckBox")
 $Scale1Button = $Window.FindName("Scale1Button")
 $Scale2Button = $Window.FindName("Scale2Button")
 $Scale3Button = $Window.FindName("Scale3Button")
@@ -487,6 +512,21 @@ function Get-Stage([double]$Level) {
     return "QUASAR"
 }
 
+function Get-EffectiveStage([double]$Level) {
+    if ($script:StageMode -and $script:StageMode -ne "AUTO") {
+        return [string]$script:StageMode
+    }
+    if ($State.stage) { return [string]$State.stage }
+    return Get-Stage $Level
+}
+
+function Get-DisplayScale([double]$Level) {
+    $manualScale = $script:StarScaleLevel / 3.0
+    if (-not $script:GrowWithTokens) { return $manualScale }
+    $safeLevel = [Math]::Min(1.0, [Math]::Max(0.0, $Level))
+    return $manualScale * (0.65 + 0.35 * $safeLevel)
+}
+
 function Format-Mass([long]$Tokens) {
     if ($Tokens -ge 1000000) {
         return ($Tokens / 1000000.0).ToString(
@@ -549,10 +589,26 @@ function Get-RateSummary {
     return ("5H %{0} | {1}" -f [Math]::Round($used), (Format-ResetRemaining ([long]$fiveHour.resets_at)))
 }
 
+function Get-SessionSummary {
+    $parts = @()
+    if (-not [string]::IsNullOrWhiteSpace([string]$State.model)) {
+        $parts += [string]$State.model
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$State.effort)) {
+        $parts += ([string]$State.effort).ToUpperInvariant()
+    }
+    return $parts -join " · "
+}
+
 function Get-DetailsText {
     $breakdown = $State.breakdown
     $limits = $State.rate_limits
+    $model = if ([string]::IsNullOrWhiteSpace([string]$State.model)) { "--" } else { [string]$State.model }
+    $effort = if ([string]::IsNullOrWhiteSpace([string]$State.effort)) { "--" } else { ([string]$State.effort).ToUpperInvariant() }
     return @(
+        "Model           $model"
+        "Effort          $effort"
+        ""
         "Total input     $(Format-TokenDetail (Get-BreakdownToken $breakdown 'total_input_tokens' 0L))"
         "Cache read      $(Format-TokenDetail (Get-BreakdownToken $breakdown 'cache_read_input_tokens' 0L))"
         "Remaining       $(Format-TokenDetail (Get-BreakdownToken $breakdown 'remaining_tokens' 0L))"
@@ -565,7 +621,7 @@ function Get-DetailsText {
 
 $EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
 $EmptyRateLimits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L }; seven_day = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L } }
-$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
+$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; model = ""; effort = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
 $LastStateWrite = [datetime]::MinValue
 $OverlayPosition = [pscustomobject]@{ x = 0.96; y = 0.06 }
 $LastHostWindow = $null
@@ -574,6 +630,10 @@ $LastMassLayoutKey = ""
 $LastDetailsText = ""
 $StarScaleLevel = 3
 $PositionLocked = $false
+$ValidStageModes = @("AUTO", "RED DWARF", "MAIN SEQUENCE", "BLUE GIANT", "HYPERGIANT", "NEUTRON STAR", "QUASAR")
+$StageMode = "AUTO"
+$GrowWithTokens = $false
+$LastAppliedDisplayScale = -1.0
 $NextStatePoll = 0.0
 $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
@@ -598,6 +658,13 @@ if (Test-Path -LiteralPath $PositionPath) {
         if ($savedPosition.PSObject.Properties['locked']) {
             $PositionLocked = [bool]$savedPosition.locked
         }
+        if ($savedPosition.PSObject.Properties['stage_mode']) {
+            $savedStageMode = ([string]$savedPosition.stage_mode).ToUpperInvariant()
+            if ($ValidStageModes -contains $savedStageMode) { $StageMode = $savedStageMode }
+        }
+        if ($savedPosition.PSObject.Properties['grow_with_tokens']) {
+            $GrowWithTokens = [bool]$savedPosition.grow_with_tokens
+        }
     }
     catch { }
 }
@@ -614,6 +681,8 @@ function Read-TokenState {
             stage = Get-Stage $demoNormalized
             project_root = ""
             project_name = ""
+            model = "Opus"
+            effort = "high"
             breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
             rate_limits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = 61.0; resets_at = $demoReset }; seven_day = [pscustomobject]@{ used_percentage = 34.0; resets_at = [DateTimeOffset]::UtcNow.AddDays(3).ToUnixTimeSeconds() } }
         }
@@ -639,6 +708,8 @@ function Read-TokenState {
             stage = [string]$value.stage
             project_root = [string]$value.project_root
             project_name = [string]$value.project_name
+            model = [string]$value.model
+            effort = [string]$value.effort
             breakdown = $breakdown
             rate_limits = $rateLimits
         }
@@ -701,7 +772,7 @@ function Get-OverlayScale([double]$Fallback) {
 }
 
 function Get-PlacementInset {
-    $baseInset = switch ([string]$State.stage) {
+    $baseInset = switch (Get-EffectiveStage ([double]$State.level)) {
         "RED DWARF" { 38.0 }
         "MAIN SEQUENCE" { 50.0 }
         "BLUE GIANT" { 64.0 }
@@ -709,7 +780,7 @@ function Get-PlacementInset {
         "NEUTRON STAR" { 38.0 }
         default { 52.0 }
     }
-    return [Math]::Max(14.0, $baseInset * ($script:StarScaleLevel / 3.0) * 0.50)
+    return [Math]::Max(14.0, $baseInset * (Get-DisplayScale ([double]$State.level)) * 0.50)
 }
 
 function Get-WindowTravelBounds($HostWindow) {
@@ -782,6 +853,8 @@ function Save-WindowPosition {
         y = [Math]::Min(1.0, [Math]::Max(0.0, $savedY))
         scale = $script:StarScaleLevel
         locked = $script:PositionLocked
+        stage_mode = $script:StageMode
+        grow_with_tokens = $script:GrowWithTokens
     }
     $json = ($script:OverlayPosition | ConvertTo-Json -Compress) + "`n"
     $temporary = $PositionPath + ".tmp"
@@ -802,9 +875,12 @@ $HoverPanelBorder = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF
 $ScaleButtonInactive = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF0D1A27"))
 $ScaleButtonActive = New-Object Windows.Media.SolidColorBrush((Convert-Color "#FF28577D"))
 
-function Apply-StarScale {
-    $multiplier = $script:StarScaleLevel / 3.0
-    $VisualLayer.RenderTransform = [Windows.Media.ScaleTransform]::new($multiplier, $multiplier, $CenterX, $CenterY)
+function Apply-StarScale([double]$Level = 0.0) {
+    $multiplier = Get-DisplayScale $Level
+    if ([Math]::Abs($multiplier - $script:LastAppliedDisplayScale) -gt 0.000001) {
+        $VisualLayer.RenderTransform = [Windows.Media.ScaleTransform]::new($multiplier, $multiplier, $CenterX, $CenterY)
+        $script:LastAppliedDisplayScale = $multiplier
+    }
     foreach ($entry in @(
         [pscustomobject]@{ Level = 1; Button = $Scale1Button },
         [pscustomobject]@{ Level = 2; Button = $Scale2Button },
@@ -818,13 +894,46 @@ function Apply-StarScale {
 function Set-StarScale([int]$Level) {
     if ($Level -lt 1 -or $Level -gt 3) { return }
     $script:StarScaleLevel = $Level
-    Apply-StarScale
+    Apply-StarScale ([double]$State.level)
     $script:LastMassLayoutKey = ""
     Update-Visual
     if ($script:LastHostWindow -and $script:LastHostWindow.Rect) {
         Set-WindowPosition $script:LastHostWindow
         Save-WindowPosition
     }
+}
+
+function Set-StageMode([string]$Mode, [bool]$Persist = $true) {
+    $normalized = $Mode.ToUpperInvariant()
+    if ($script:ValidStageModes -notcontains $normalized) { return }
+    $script:StageMode = $normalized
+    foreach ($item in @($StageModeComboBox.Items)) {
+        if ([string]$item.Tag -eq $normalized -and $StageModeComboBox.SelectedItem -ne $item) {
+            $StageModeComboBox.SelectedItem = $item
+            break
+        }
+    }
+    $script:LastMassLayoutKey = ""
+    Update-Visual
+    if ($script:LastHostWindow -and $script:LastHostWindow.Rect) {
+        Set-WindowPosition $script:LastHostWindow
+    }
+    if ($Persist -and -not $SelfTest) { Save-WindowPosition }
+}
+
+function Set-GrowWithTokens([bool]$Enabled, [bool]$Persist = $true) {
+    $script:GrowWithTokens = $Enabled
+    if ([bool]$GrowWithTokensCheckBox.IsChecked -ne $Enabled) {
+        $GrowWithTokensCheckBox.IsChecked = $Enabled
+    }
+    $script:LastAppliedDisplayScale = -1.0
+    Apply-StarScale ([double]$State.level)
+    $script:LastMassLayoutKey = ""
+    Update-Visual
+    if ($script:LastHostWindow -and $script:LastHostWindow.Rect) {
+        Set-WindowPosition $script:LastHostWindow
+    }
+    if ($Persist -and -not $SelfTest) { Save-WindowPosition }
 }
 
 function Set-PositionLock([bool]$Locked, [bool]$Persist = $true) {
@@ -834,7 +943,15 @@ function Set-PositionLock([bool]$Locked, [bool]$Persist = $true) {
     if ($Persist) { Save-WindowPosition }
 }
 
-Apply-StarScale
+foreach ($item in @($StageModeComboBox.Items)) {
+    if ([string]$item.Tag -eq $StageMode) {
+        $StageModeComboBox.SelectedItem = $item
+        break
+    }
+}
+$GrowWithTokensCheckBox.IsChecked = $GrowWithTokens
+$LockPositionCheckBox.IsChecked = $PositionLocked
+Apply-StarScale ([double]$State.level)
 
 function Test-PointOverElement($Point, $Element, [double]$Padding = 0.0) {
     $left = [Windows.Controls.Canvas]::GetLeft($Element)
@@ -946,6 +1063,14 @@ $DetailsButton.Add_Click({
 $Scale1Button.Add_Click({ Set-StarScale 1; $_.Handled = $true })
 $Scale2Button.Add_Click({ Set-StarScale 2; $_.Handled = $true })
 $Scale3Button.Add_Click({ Set-StarScale 3; $_.Handled = $true })
+$StageModeComboBox.Add_SelectionChanged({
+    if ($StageModeComboBox.SelectedItem -and $StageModeComboBox.SelectedItem.Tag) {
+        Set-StageMode ([string]$StageModeComboBox.SelectedItem.Tag)
+    }
+    $_.Handled = $true
+})
+$GrowWithTokensCheckBox.Add_Checked({ Set-GrowWithTokens $true; $_.Handled = $true })
+$GrowWithTokensCheckBox.Add_Unchecked({ Set-GrowWithTokens $false; $_.Handled = $true })
 $LockPositionCheckBox.Add_Checked({ Set-PositionLock $true; $_.Handled = $true })
 $LockPositionCheckBox.Add_Unchecked({ Set-PositionLock $false; $_.Handled = $true })
 Set-PositionLock $PositionLocked $false
@@ -962,7 +1087,8 @@ function Update-Visual {
         $script:NextStatePoll = $time + 0.25
     }
     $level = [double]$State.level
-    $stage = if ($State.stage) { [string]$State.stage } else { Get-Stage $level }
+    $stage = Get-EffectiveStage $level
+    Apply-StarScale $level
 
     $hostWindow = if ($SelfTest) { [pscustomobject]@{ Rect = $null; Scale = 1.0; Title = "" } } else { Get-IdeWindow }
     $visible = [bool]$State.active -and $null -ne $hostWindow -and (Test-ProjectWindow $hostWindow)
@@ -999,7 +1125,7 @@ function Update-Visual {
         "NEUTRON STAR" { 42.0 }
         default { 92.0 }
     }
-    $starMultiplier = $script:StarScaleLevel / 3.0
+    $starMultiplier = Get-DisplayScale $level
     $displayDiameter = $diameter * $starMultiplier
     Set-CenteredSize $DragHandle ([Math]::Max(28.0, $displayDiameter)) ([Math]::Max(28.0, $displayDiameter))
     $colors = switch ($stage) {
@@ -1229,19 +1355,23 @@ function Update-Visual {
         }
     }
 
+    $windowSize = Get-BreakdownToken $State.breakdown 'context_window_size' 0L
     $massLabel = "MASS $(Format-Mass ([long]$State.tokens))"
+    if ($windowSize -gt 0) { $massLabel += " / $(Format-Mass $windowSize)" }
     $rateSummary = Get-RateSummary
+    $sessionSummary = Get-SessionSummary
+    $secondarySummary = if ($sessionSummary) { "$sessionSummary | $rateSummary" } else { $rateSummary }
     $detailsContent = Get-DetailsText
     if ($detailsContent -ne $script:LastDetailsText) {
         $script:LastDetailsText = $detailsContent
         $DetailsText.Text = $detailsContent
     }
     $positionKey = "{0},{1}" -f [Math]::Round($Window.Left), [Math]::Round($Window.Top)
-    $massLayoutKey = "$massLabel|$stage|$rateSummary|$($script:StarScaleLevel)|$positionKey"
+    $massLayoutKey = "$massLabel|$stage|$secondarySummary|$($script:StarScaleLevel)|$($script:GrowWithTokens)|$positionKey"
     if ($massLayoutKey -ne $script:LastMassLayoutKey) {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
-        $RateText.Text = " | $rateSummary"
+        $RateText.Text = " | $secondarySummary"
         $MassPanel.Width = [double]::NaN
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
         $DetailsPanel.Measure((New-Object Windows.Size($DetailsPanel.Width, [double]::PositiveInfinity)))
@@ -1329,6 +1459,11 @@ if ($SelfTest) {
         (Format-Mass 1250000) -ne "1.25M") {
         throw "Token Star overlay mass-format self-test failed."
     }
+    if ([string]$StageModeComboBox.SelectedItem.Tag -ne $script:StageMode -or
+        [bool]$GrowWithTokensCheckBox.IsChecked -ne $script:GrowWithTokens -or
+        [bool]$LockPositionCheckBox.IsChecked -ne $script:PositionLocked) {
+        throw "Token Star overlay persisted-preferences self-test failed."
+    }
     $State.project_name = "ScopedProject"
     if (-not (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - ScopedProject - PyCharm" }))) {
         throw "Token Star overlay project-title match self-test failed."
@@ -1357,6 +1492,12 @@ if ($SelfTest) {
     if (-not $script:DetailsOpen -or $DetailsPanel.Visibility -ne "Visible") {
         throw "Token Star overlay details dropdown self-test failed."
     }
+    if ($DetailsText.Text -notmatch "Model\s+Opus" -or $DetailsText.Text -notmatch "Effort\s+HIGH") {
+        throw "Token Star overlay model/effort self-test failed."
+    }
+    if ($MassText.Text -notmatch "MASS 190K / 200K") {
+        throw "Token Star overlay used/available token self-test failed."
+    }
     $Root.Measure((New-Object Windows.Size(500, 500)))
     $Root.Arrange((New-Object Windows.Rect(0, 0, 500, 500)))
     $Root.UpdateLayout()
@@ -1367,6 +1508,8 @@ if ($SelfTest) {
     if (-not (Test-PointOverElement $detailsPoint $DetailsPanel 0.0)) {
         throw "Token Star overlay details-panel hit-test self-test failed."
     }
+    Set-GrowWithTokens $false $false
+    Set-StageMode "AUTO" $false
     $Scale1Button.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
     if ($script:StarScaleLevel -ne 1 -or [Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - (1.0 / 3.0)) -gt 0.0001) {
         throw "Token Star overlay 1x scale self-test failed."
@@ -1375,6 +1518,24 @@ if ($SelfTest) {
     if ($script:StarScaleLevel -ne 3 -or [Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - 1.0) -gt 0.0001) {
         throw "Token Star overlay 3x scale self-test failed."
     }
+    Set-StageMode "QUASAR" $false
+    if ((Get-EffectiveStage 0.01) -ne "QUASAR" -or [string]$StageModeComboBox.SelectedItem.Tag -ne "QUASAR") {
+        throw "Token Star overlay fixed-stage self-test failed."
+    }
+    $originalLevel = [double]$State.level
+    $State.level = 0.0
+    Set-GrowWithTokens $true $false
+    if ([Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - 0.65) -gt 0.0001) {
+        throw "Token Star overlay token-growth minimum self-test failed."
+    }
+    $State.level = 1.0
+    Apply-StarScale 1.0
+    if ([Math]::Abs([double]$VisualLayer.RenderTransform.ScaleX - 1.0) -gt 0.0001) {
+        throw "Token Star overlay token-growth maximum self-test failed."
+    }
+    $State.level = $originalLevel
+    Set-GrowWithTokens $false $false
+    Set-StageMode "AUTO" $false
     Set-PositionLock $true $false
     if (-not $script:PositionLocked -or $DragHandle.Cursor.ToString() -ne "Arrow") {
         throw "Token Star overlay position-lock self-test failed."

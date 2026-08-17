@@ -76,8 +76,15 @@ try {
         Assert-True ($parseErrors.Count -eq 0) "$file has PowerShell syntax errors"
     }
 
+    $overlaySelfTestPosition = Join-Path $TemporaryRoot "overlay-self-test-position.json"
+    [System.IO.File]::WriteAllText(
+        $overlaySelfTestPosition,
+        '{"x":0.5,"y":0.5,"scale":2,"locked":true,"stage_mode":"QUASAR","grow_with_tokens":true}',
+        $Utf8NoBom
+    )
     $overlayTest = & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass `
-        -File (Join-Path $Root "token-star-overlay.ps1") -SelfTest -Demo
+        -File (Join-Path $Root "token-star-overlay.ps1") -SelfTest -Demo `
+        -PositionPath $overlaySelfTestPosition
     Assert-True ($LASTEXITCODE -eq 0) "IDE overlay self-test failed"
     Assert-True (($overlayTest -join "") -match "self-test OK") "IDE overlay self-test output is wrong"
 
@@ -159,9 +166,10 @@ try {
             seven_day = [ordered]@{ used_percentage = 28; resets_at = 0 }
         }
         model = [ordered]@{ display_name = "Opus" }
+        effort = [ordered]@{ level = "high" }
     }
     $output = ($statusPayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge
-    Assert-True (($output -join "") -match "95% - QUASAR - Opus") "status line output is wrong"
+    Assert-True (($output -join "") -match "MASS 190\.0K / 200\.0K TOKENS - 95% - QUASAR - Opus - HIGH effort") "status line output is wrong"
     $shader = [System.IO.File]::ReadAllText($generated)
     Assert-True ($shader.StartsWith("#define TOKEN_LEVEL 0.95")) "level define is wrong"
     Assert-True ($shader -match "#define TOKEN_MASS_K 190") "mass define is wrong"
@@ -175,6 +183,8 @@ try {
     Assert-True ($overlayState.stage -eq "QUASAR") "overlay stage is wrong"
     Assert-True (Test-SameDirectoryPath ([string]$overlayState.project_root) $ScopedProject) "overlay project root is wrong"
     Assert-True ($overlayState.project_name -eq "ScopedProject") "overlay project name is wrong"
+    Assert-True ($overlayState.model -eq "Opus") "overlay model is wrong"
+    Assert-True ($overlayState.effort -eq "high") "overlay effort is wrong"
     Assert-True ([long]$overlayState.breakdown.fresh_input_tokens -eq 85000) "fresh input breakdown is wrong"
     Assert-True ([long]$overlayState.breakdown.cache_creation_input_tokens -eq 60000) "cache creation breakdown is wrong"
     Assert-True ([long]$overlayState.breakdown.cache_read_input_tokens -eq 45000) "cache read breakdown is wrong"

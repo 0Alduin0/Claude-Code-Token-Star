@@ -85,10 +85,15 @@ sh ./.claude-token-star/install.sh
 ## Use it
 
 - Drag the star to move it near an IDE corner or edge.
-- `MASS 85K` means approximately 85,000 context tokens are in use.
+- `MASS 656K / 1.00M` shows used tokens beside the model's context capacity.
 - `5H 61% | 2h 23m` shows five-hour usage and the time until reset.
-- Click the arrow for input, cache-read, remaining-context, five-hour, reset,
-  and seven-day details.
+- The compact bar shows the active Claude model and effort level.
+- Click the arrow for model, effort, input, cache-read, remaining-context,
+  five-hour, reset, and seven-day details.
+- Choose **Auto** to evolve through every stellar stage, or pin one stage such
+  as **Quasar** so its appearance stays fixed.
+- Enable **Grow with token usage** when the selected star should scale from
+  65% to 100% as the context fills.
 - Choose `1x`, `2x`, or `3x` to resize the star.
 - Enable **Lock position** to prevent accidental dragging.
 - The Windows overlay hides when you switch away from its installed project.
