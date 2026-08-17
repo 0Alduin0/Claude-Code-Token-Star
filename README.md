@@ -48,7 +48,8 @@ npx --yes github:0Alduin0/Claude-Code-Token-Star
 On Windows, the installer uses `ExecutionPolicy Bypass` only for the child
 PowerShell process because the local scripts are not code-signed. It does not
 change your user or system execution policy. The source is copied into
-`.claude-token-star/` so it remains inspectable.
+`.claude-token-star/` so it remains inspectable. Each project gets its own
+`.claude/settings.local.json`, overlay process, and hashed runtime directory.
 
 Windows does not require Python. Linux and macOS require Ghostty 1.3+ and
 Python 3.10+.

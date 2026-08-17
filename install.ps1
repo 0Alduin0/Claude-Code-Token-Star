@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$ClaudeSettings = (Join-Path $HOME ".claude\settings.json"),
+    [string]$ClaudeSettings,
     [string]$TerminalSettings,
-    [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\Fragments\GhosttySupernova"),
+    [string]$RuntimeRoot,
     [string]$ProjectPath = (Get-Location).Path,
     [switch]$SkipVersionCheck,
     [switch]$NoLaunch
@@ -12,6 +12,14 @@ $ErrorActionPreference = "Stop"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $StateName = "ghostty-supernova.windows.install.json"
+
+function Get-StableHash {
+    param([string]$Value)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value)) }
+    finally { $sha256.Dispose() }
+    return (($bytes | ForEach-Object { $_.ToString("x2") }) -join "").Substring(0, 16)
+}
 
 function Find-TerminalSettings {
     if ($TerminalSettings) { return [System.IO.Path]::GetFullPath($TerminalSettings) }
@@ -154,9 +162,6 @@ function Stop-InstalledOverlay {
     }
 }
 
-$TerminalSettings = Find-TerminalSettings
-$ClaudeSettings = [System.IO.Path]::GetFullPath($ClaudeSettings)
-$RuntimeRoot = [System.IO.Path]::GetFullPath($RuntimeRoot)
 $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
 if (-not $PSBoundParameters.ContainsKey("ProjectPath") -and
     (Split-Path -Leaf $ProjectPath) -eq ".claude-token-star") {
@@ -164,6 +169,37 @@ if (-not $PSBoundParameters.ContainsKey("ProjectPath") -and
 }
 if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
     throw "Project directory was not found: $ProjectPath"
+}
+$canonicalProjectPath = $ProjectPath.TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+).ToUpperInvariant()
+$projectHash = Get-StableHash $canonicalProjectPath
+if ([string]::IsNullOrWhiteSpace($ClaudeSettings)) {
+    $ClaudeSettings = Join-Path $ProjectPath ".claude\settings.local.json"
+}
+if ([string]::IsNullOrWhiteSpace($RuntimeRoot)) {
+    $RuntimeRoot = Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\Fragments\GhosttySupernova-$projectHash"
+}
+$TerminalSettings = Find-TerminalSettings
+$ClaudeSettings = [System.IO.Path]::GetFullPath($ClaudeSettings)
+$RuntimeRoot = [System.IO.Path]::GetFullPath($RuntimeRoot)
+
+# Migrate the former global, single-project Windows install when it belongs to
+# this project. New installs use project-local settings and isolated runtimes.
+$globalClaudeSettings = [System.IO.Path]::GetFullPath((Join-Path $HOME ".claude\settings.json"))
+$globalStatePath = Join-Path (Split-Path -Parent $globalClaudeSettings) $StateName
+$expectedLocalSettings = [System.IO.Path]::GetFullPath((Join-Path $ProjectPath ".claude\settings.local.json"))
+if ($ClaudeSettings.Equals($expectedLocalSettings, [StringComparison]::OrdinalIgnoreCase) -and
+    -not $ClaudeSettings.Equals($globalClaudeSettings, [StringComparison]::OrdinalIgnoreCase) -and
+    (Test-Path -LiteralPath $globalStatePath)) {
+    $globalState = Read-JsonObject $globalStatePath "Legacy Windows install state"
+    if ($globalState.PSObject.Properties["project_path"] -and $globalState.project_path -and
+        ([System.IO.Path]::GetFullPath([string]$globalState.project_path)).Equals(
+            $ProjectPath, [StringComparison]::OrdinalIgnoreCase
+        )) {
+        & (Join-Path $ScriptRoot "uninstall.ps1") -ClaudeSettings $globalClaudeSettings | Out-Null
+    }
 }
 
 if (-not $SkipVersionCheck) {
@@ -191,11 +227,13 @@ foreach ($name in @("token-mass-windows.ps1", "token-star-overlay.ps1", "superno
 [System.IO.File]::WriteAllText((Join-Path $RuntimeRoot "overlay.enabled"), "enabled`n", $Utf8NoBom)
 
 $generatedShader = Join-Path $RuntimeRoot "supernova-windows.generated.hlsl"
+$guidHex = (Get-StableHash ($canonicalProjectPath + "|PROFILE")) + (Get-StableHash ($canonicalProjectPath + "|TERMINAL"))
+$profileGuid = "{$($guidHex.Substring(0, 8))-$($guidHex.Substring(8, 4))-$($guidHex.Substring(12, 4))-$($guidHex.Substring(16, 4))-$($guidHex.Substring(20, 12))}"
 $profile = [ordered]@{
     profiles = @(
         [ordered]@{
-            guid = "{8f3e7344-11ef-5c09-a645-9b8c2c3f6b63}"
-            name = "Claude Supernova"
+            guid = $profileGuid
+            name = "Claude Supernova ($((Get-Item -LiteralPath $ProjectPath).Name))"
             commandline = 'powershell.exe -NoLogo -NoExit -Command "claude"'
             startingDirectory = "%USERPROFILE%"
             "experimental.pixelShaderPath" = $generatedShader
@@ -242,7 +280,7 @@ if (@($state.PSObject.Properties).Count -eq 0) {
         $previousStatusLine = if ($hadStatusLine) { $settings.statusLine } else { $null }
     }
     $state = [pscustomobject]@{
-        schema = 1
+        schema = 2
         had_status_line = $hadStatusLine
         previous_status_line = $previousStatusLine
     }

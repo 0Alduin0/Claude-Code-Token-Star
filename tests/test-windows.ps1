@@ -230,6 +230,59 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $RuntimeRoot)) "runtime directory was not removed completely"
     Assert-True (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $ClaudeSettings) "ghostty-supernova.windows.install.json"))) "install state was not removed"
 
+    # Default Windows installs must isolate settings, runtime state, profiles,
+    # and uninstall behavior for every project.
+    $oldLocalAppData = $env:LOCALAPPDATA
+    $env:LOCALAPPDATA = Join-Path $TemporaryRoot "local-app-data"
+    try {
+        & (Join-Path $Root "install.ps1") `
+            -ProjectPath $ScopedProject `
+            -TerminalSettings $TerminalSettings `
+            -SkipVersionCheck `
+            -NoLaunch | Out-Null
+        & (Join-Path $Root "install.ps1") `
+            -ProjectPath $OtherProject `
+            -TerminalSettings $TerminalSettings `
+            -SkipVersionCheck `
+            -NoLaunch | Out-Null
+
+        $settingsAPath = Join-Path $ScopedProject ".claude\settings.local.json"
+        $settingsBPath = Join-Path $OtherProject ".claude\settings.local.json"
+        $stateAPath = Join-Path $ScopedProject ".claude\ghostty-supernova.windows.install.json"
+        $stateBPath = Join-Path $OtherProject ".claude\ghostty-supernova.windows.install.json"
+        $stateA = [System.IO.File]::ReadAllText($stateAPath) | ConvertFrom-Json
+        $stateB = [System.IO.File]::ReadAllText($stateBPath) | ConvertFrom-Json
+        $settingsA = [System.IO.File]::ReadAllText($settingsAPath) | ConvertFrom-Json
+        $settingsB = [System.IO.File]::ReadAllText($settingsBPath) | ConvertFrom-Json
+        Assert-True (-not ([string]$stateA.runtime_root).Equals(
+            [string]$stateB.runtime_root, [StringComparison]::OrdinalIgnoreCase
+        )) "two projects shared a Windows runtime"
+        Assert-True (Test-Path -LiteralPath ([string]$stateA.runtime_root)) "project A runtime is missing"
+        Assert-True (Test-Path -LiteralPath ([string]$stateB.runtime_root)) "project B runtime is missing"
+        Assert-True ($settingsA.statusLine.command -match [regex]::Escape([string]$stateA.runtime_root)) `
+            "project A settings do not use project A runtime"
+        Assert-True ($settingsB.statusLine.command -match [regex]::Escape([string]$stateB.runtime_root)) `
+            "project B settings do not use project B runtime"
+        $profileA = [System.IO.File]::ReadAllText((Join-Path ([string]$stateA.runtime_root) "profile.json")) | ConvertFrom-Json
+        $profileB = [System.IO.File]::ReadAllText((Join-Path ([string]$stateB.runtime_root) "profile.json")) | ConvertFrom-Json
+        Assert-True ($profileA.profiles[0].guid -ne $profileB.profiles[0].guid) `
+            "two projects shared a Windows Terminal profile GUID"
+
+        & (Join-Path $Root "uninstall.ps1") -ProjectPath $ScopedProject | Out-Null
+        Assert-True (-not (Test-Path -LiteralPath ([string]$stateA.runtime_root))) `
+            "uninstall left project A runtime behind"
+        Assert-True (Test-Path -LiteralPath ([string]$stateB.runtime_root)) `
+            "uninstalling project A removed project B runtime"
+        $settingsBAfter = [System.IO.File]::ReadAllText($settingsBPath) | ConvertFrom-Json
+        Assert-True ($settingsBAfter.statusLine.command -eq $settingsB.statusLine.command) `
+            "uninstalling project A changed project B settings"
+
+        & (Join-Path $Root "uninstall.ps1") -ProjectPath $OtherProject | Out-Null
+        Assert-True (-not (Test-Path -LiteralPath ([string]$stateB.runtime_root))) `
+            "uninstall left project B runtime behind"
+    }
+    finally { $env:LOCALAPPDATA = $oldLocalAppData }
+
     Write-Output "Windows bridge/install/uninstall integration tests passed."
 }
 finally {

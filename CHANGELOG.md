@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Isolated Windows settings, runtimes, overlay processes, and Terminal profiles
+  per project so installing or uninstalling one project cannot affect another.
+- Added `python` fallback discovery for `doctor`, `sweep`, and `off` when
+  `python3` is unavailable on Linux or macOS.
+- Made the Windows overlay format token counts at or above one million with an
+  `M` suffix, consistently with the other status surfaces.
+
 ## 2.6.1 - 2026-08-12
 
 - Replaced the stage-slideshow GIF with a 60-frame recording of the real

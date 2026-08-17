@@ -30,8 +30,16 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
+$mutexHashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $mutexBytes = $mutexHashAlgorithm.ComputeHash(
+        [System.Text.Encoding]::UTF8.GetBytes([System.IO.Path]::GetFullPath($PSScriptRoot).ToUpperInvariant())
+    )
+}
+finally { $mutexHashAlgorithm.Dispose() }
+$mutexSuffix = (($mutexBytes[0..7] | ForEach-Object { $_.ToString("x2") }) -join "")
 $CreatedNew = $false
-$OverlayMutex = New-Object System.Threading.Mutex($true, "Local\ClaudeCodeTokenStarOverlay", [ref]$CreatedNew)
+$OverlayMutex = New-Object System.Threading.Mutex($true, "Local\ClaudeCodeTokenStarOverlay-$mutexSuffix", [ref]$CreatedNew)
 if (-not $CreatedNew -and -not $SelfTest) {
     $OverlayMutex.Dispose()
     exit 0
@@ -480,6 +488,11 @@ function Get-Stage([double]$Level) {
 }
 
 function Format-Mass([long]$Tokens) {
+    if ($Tokens -ge 1000000) {
+        return ($Tokens / 1000000.0).ToString(
+            "0.00", [System.Globalization.CultureInfo]::InvariantCulture
+        ) + "M"
+    }
     return "{0:0}K" -f ($Tokens / 1000.0)
 }
 
@@ -1312,6 +1325,10 @@ $Window.Add_SourceInitialized({
 Read-TokenState
 Update-Visual
 if ($SelfTest) {
+    if ((Format-Mass 999999) -ne "1000K" -or (Format-Mass 1000000) -ne "1.00M" -or
+        (Format-Mass 1250000) -ne "1.25M") {
+        throw "Token Star overlay mass-format self-test failed."
+    }
     $State.project_name = "ScopedProject"
     if (-not (Test-ProjectWindow ([pscustomobject]@{ Title = "main.py - ScopedProject - PyCharm" }))) {
         throw "Token Star overlay project-title match self-test failed."

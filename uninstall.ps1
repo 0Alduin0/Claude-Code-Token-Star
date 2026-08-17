@@ -1,11 +1,20 @@
 [CmdletBinding()]
 param(
-    [string]$ClaudeSettings = (Join-Path $HOME ".claude\settings.json")
+    [string]$ClaudeSettings,
+    [string]$ProjectPath = (Get-Location).Path
 )
 
 $ErrorActionPreference = "Stop"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $StateName = "ghostty-supernova.windows.install.json"
+$ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
+if (-not $PSBoundParameters.ContainsKey("ProjectPath") -and
+    (Split-Path -Leaf $ProjectPath) -eq ".claude-token-star") {
+    $ProjectPath = Split-Path -Parent $ProjectPath
+}
+if ([string]::IsNullOrWhiteSpace($ClaudeSettings)) {
+    $ClaudeSettings = Join-Path $ProjectPath ".claude\settings.local.json"
+}
 $ClaudeSettings = [System.IO.Path]::GetFullPath($ClaudeSettings)
 $statePath = Join-Path (Split-Path -Parent $ClaudeSettings) $StateName
 

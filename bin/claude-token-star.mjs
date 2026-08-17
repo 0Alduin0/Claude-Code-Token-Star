@@ -10,10 +10,16 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { findPython } from "./python-runtime.mjs";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = process.cwd();
 const installRoot = join(projectRoot, ".claude-token-star");
+const projectClaudeSettings = join(
+  projectRoot,
+  ".claude",
+  "settings.local.json",
+);
 const command = (process.argv[2] || "install").toLowerCase();
 const forwardedArgs = process.argv.slice(3);
 const packageJson = JSON.parse(
@@ -99,6 +105,12 @@ function runPowerShell(script, args = []) {
   ]);
 }
 
+function runPython(args) {
+  const python = findPython();
+  if (!python) fail("Python 3.10+ was not found on PATH.");
+  run(python, args);
+}
+
 function showHelp() {
   console.log(`Claude Code Token Star ${packageJson.version}
 
@@ -124,6 +136,8 @@ if (["-h", "--help", "help"].includes(command)) {
     runPowerShell(join(installRoot, "install.ps1"), [
       "-ProjectPath",
       projectRoot,
+      "-ClaudeSettings",
+      projectClaudeSettings,
       ...forwardedArgs,
     ]);
   } else {
@@ -131,7 +145,13 @@ if (["-h", "--help", "help"].includes(command)) {
   }
 } else if (command === "uninstall") {
   if (process.platform === "win32") {
-    runPowerShell(installedFile("uninstall.ps1"), forwardedArgs);
+    runPowerShell(installedFile("uninstall.ps1"), [
+      "-ProjectPath",
+      projectRoot,
+      "-ClaudeSettings",
+      projectClaudeSettings,
+      ...forwardedArgs,
+    ]);
   } else {
     run("sh", [installedFile("uninstall.sh"), ...forwardedArgs]);
   }
@@ -139,9 +159,14 @@ if (["-h", "--help", "help"].includes(command)) {
   console.log(`Removed ${installRoot}`);
 } else if (["doctor", "sweep", "off"].includes(command)) {
   if (process.platform === "win32") {
-    runPowerShell(installedFile("token-test.ps1"), [command, ...forwardedArgs]);
+    runPowerShell(installedFile("token-test.ps1"), [
+      command,
+      "-ClaudeSettings",
+      projectClaudeSettings,
+      ...forwardedArgs,
+    ]);
   } else {
-    run("python3", [
+    runPython([
       installedFile("token-mass.py"),
       `--${command}`,
       ...forwardedArgs,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { findPython } from "../bin/python-runtime.mjs";
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const fileVersion = readFileSync("VERSION", "utf8").trim();
@@ -24,5 +25,20 @@ const unknown = spawnSync(process.execPath, [cli, "nope"], {
 });
 assert.equal(unknown.status, 1);
 assert.match(unknown.stderr, /unknown command/);
+
+const pythonCalls = [];
+const python = findPython((executable, args) => {
+  pythonCalls.push([executable, args]);
+  return executable === "python"
+    ? { error: undefined, status: 0 }
+    : { error: new Error("not found"), status: null };
+});
+assert.equal(python, "python", "Python discovery must fall back to python");
+assert.deepEqual(
+  pythonCalls.map(([executable]) => executable),
+  ["python3", "python"],
+  "Python discovery order changed",
+);
+assert.match(pythonCalls[0][1][1], /3, 10/, "Python 3.10+ check missing");
 
 console.log("CLI contract OK");

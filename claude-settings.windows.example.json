@@ -1,7 +1,7 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"%LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova\\token-mass-windows.ps1\""
+    "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\YOU\\AppData\\Local\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova-PROJECT_HASH\\token-mass-windows.ps1\""
   },
   "hooks": {
     "SessionStart": [
@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"%LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova\\token-mass-windows.ps1\"",
+            "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\YOU\\AppData\\Local\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova-PROJECT_HASH\\token-mass-windows.ps1\"",
             "timeout": 5
           }
         ]
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"%LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova\\token-mass-windows.ps1\"",
+            "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\YOU\\AppData\\Local\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova-PROJECT_HASH\\token-mass-windows.ps1\"",
             "timeout": 5
           }
         ]
