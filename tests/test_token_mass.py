@@ -9,7 +9,9 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("token_mass", ROOT / "token-mass.py")
+SPEC = importlib.util.spec_from_file_location(
+    "token_mass", ROOT / "src" / "ghostty" / "token-mass.py"
+)
 assert SPEC and SPEC.loader
 token_mass = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(token_mass)

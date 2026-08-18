@@ -8,7 +8,11 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$toolsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sourceRoot = Split-Path -Parent $toolsRoot
+$sourceBridge = Join-Path $sourceRoot "src\windows\token-mass-windows.ps1"
+$sourceLayout = Test-Path -LiteralPath $sourceBridge
+$projectRoot = if ($sourceLayout) { $sourceRoot } else { Split-Path -Parent $toolsRoot }
 if ([string]::IsNullOrWhiteSpace($ClaudeSettings)) {
     $ClaudeSettings = Join-Path $projectRoot ".claude\settings.local.json"
 }
@@ -26,16 +30,17 @@ if (Test-Path -LiteralPath $statePath) {
 if (-not $installed) {
     $installed = Join-Path $env:LOCALAPPDATA "Microsoft\Windows Terminal\Fragments\GhosttySupernova\token-mass-windows.ps1"
 }
-$local = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "token-mass-windows.ps1"
-$bridge = if (Test-Path -LiteralPath $installed) { $installed } else { $local }
+$local = Join-Path $toolsRoot "token-mass-windows.ps1"
+$bridge = if (Test-Path -LiteralPath $installed) { $installed } elseif ($sourceLayout) { $sourceBridge } else { $local }
 if (-not (Test-Path -LiteralPath $bridge)) { throw "Windows token bridge was not found." }
 
 switch ($Action.ToLowerInvariant()) {
     "sweep" { & $bridge -Sweep; exit $LASTEXITCODE }
+    "on" { & $bridge -On; exit $LASTEXITCODE }
     "off" { & $bridge -Off; exit $LASTEXITCODE }
     "doctor" { & $bridge -Doctor; exit $LASTEXITCODE }
     "" {
-        Write-Output "Usage: .\token-test.ps1 LEVEL|sweep|off|doctor [-Tokens N]"
+        Write-Output "Usage: .\token-test.ps1 LEVEL|sweep|on|off|doctor [-Tokens N]"
         exit 2
     }
     default {

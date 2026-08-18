@@ -74,16 +74,18 @@ public static class TokenStarNative {
     [DllImport("user32.dll", SetLastError=true)] public static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll", SetLastError=true)] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+    [DllImport("psapi.dll")] public static extern bool EmptyWorkingSet(IntPtr process);
 }
 "@
 
 [xml]$Xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Width="500" Height="500" WindowStyle="None" AllowsTransparency="True"
+        Width="1080" Height="760" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" Topmost="True" ShowInTaskbar="False"
         ShowActivated="False" Focusable="False" ResizeMode="NoResize">
-  <Canvas Name="Root" Width="500" Height="500">
-    <Canvas Name="VisualLayer" Width="500" Height="500" IsHitTestVisible="False">
+  <Canvas Name="Root" Width="1080" Height="760">
+    <Canvas Name="VisualLayer" Width="500" Height="500" Canvas.Left="230" Canvas.Top="215"
+            IsHitTestVisible="False">
     <Canvas Name="Stars" />
     <Ellipse Name="Nebula" Opacity="0">
     </Ellipse>
@@ -226,8 +228,8 @@ public static class TokenStarNative {
     <Ellipse Name="DragHandle" Width="92" Height="92" Fill="#01000000"
              Cursor="SizeAll" />
 
-    <Border Name="MassPanel" Background="#F203060C" BorderBrush="#CC5F91BF"
-            BorderThickness="1" CornerRadius="4" Padding="5,2" Opacity="0">
+    <Border Name="MassPanel" Background="#F20A111B" BorderBrush="#CC5F91BF"
+            BorderThickness="1" CornerRadius="7" Padding="7,4" Opacity="0">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
@@ -235,22 +237,22 @@ public static class TokenStarNative {
           <ColumnDefinition Width="24" />
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Name="MassText" Text="MASS 0K" Foreground="#FFF8FCFF"
-                   FontFamily="Consolas" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+                   FontFamily="Segoe UI" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
         <TextBlock Grid.Column="1" Name="RateText" Text=" | 5H -- | --" Foreground="#FFA9C4DF"
-                   FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" Margin="3,0,3,0" />
+                   FontFamily="Segoe UI" FontSize="10" VerticalAlignment="Center" Margin="3,0,3,0" />
         <Button Grid.Column="2" Name="DetailsButton" Content="&#x25BC;" ToolTip="Show token details"
                 Foreground="#FFFFFFFF" Background="#FF14283B" BorderBrush="#FF527CA4"
                 BorderThickness="1,0,0,0" MinWidth="24" FontWeight="Bold"
-                FontSize="10" Padding="4,0" Margin="0,-2,-5,-2"
+                FontFamily="Segoe UI" FontSize="10" Padding="4,0" Margin="0,-4,-7,-4"
                 Cursor="Hand" Focusable="False" />
       </Grid>
     </Border>
-    <Border Name="DetailsPanel" Width="282" Background="#F203060C" BorderBrush="#AA4C7199"
-            BorderThickness="1" CornerRadius="4" Padding="8,6" Opacity="0"
+    <Border Name="DetailsPanel" Width="300" Background="#F20A111B" BorderBrush="#AA4C7199"
+            BorderThickness="1" CornerRadius="7" Padding="10,8" Opacity="0"
             Visibility="Collapsed">
       <StackPanel>
-        <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Consolas"
-                   FontSize="11" LineHeight="15" />
+        <TextBlock Name="DetailsText" Foreground="#FFE8F4FF" FontFamily="Segoe UI"
+                   FontSize="11" LineHeight="16" />
         <Border Height="1" Background="#664C7199" Margin="0,6,0,5" />
         <Grid>
           <Grid.ColumnDefinitions>
@@ -258,10 +260,10 @@ public static class TokenStarNative {
             <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
           <TextBlock Grid.Column="0" Text="STAR STAGE" Foreground="#FFA9C4DF"
-                     FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" />
+                     FontFamily="Segoe UI" FontSize="10" VerticalAlignment="Center" />
           <ComboBox Grid.Column="1" Name="StageModeComboBox" Height="24"
                     Foreground="#FF102030" Background="#FFF4F8FC" BorderBrush="#FF527CA4"
-                    FontFamily="Consolas" FontSize="10" Cursor="Hand" Focusable="False">
+                    FontFamily="Segoe UI" FontSize="10" Cursor="Hand" Focusable="False">
             <ComboBoxItem Content="Auto (token based)" Tag="AUTO" />
             <ComboBoxItem Content="Red Dwarf" Tag="RED DWARF" />
             <ComboBoxItem Content="Main Sequence" Tag="MAIN SEQUENCE" />
@@ -272,7 +274,7 @@ public static class TokenStarNative {
           </ComboBox>
         </Grid>
         <CheckBox Name="GrowWithTokensCheckBox" Content="Grow with token usage"
-                  Foreground="#FFE8F4FF" FontFamily="Consolas" FontSize="10"
+                  Foreground="#FFE8F4FF" FontFamily="Segoe UI" FontSize="10"
                   Margin="0,5,0,0" Cursor="Hand" Focusable="False" />
         <Border Height="1" Background="#664C7199" Margin="0,5,0,5" />
         <Grid>
@@ -283,20 +285,20 @@ public static class TokenStarNative {
             <ColumnDefinition Width="34" />
           </Grid.ColumnDefinitions>
           <TextBlock Grid.Column="0" Text="STAR SIZE" Foreground="#FFA9C4DF"
-                     FontFamily="Consolas" FontSize="10" VerticalAlignment="Center" />
+                     FontFamily="Segoe UI" FontSize="10" VerticalAlignment="Center" />
           <Button Grid.Column="1" Name="Scale1Button" Content="1x" Margin="1,0"
                   Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
-                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+                  FontFamily="Segoe UI" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
           <Button Grid.Column="2" Name="Scale2Button" Content="2x" Margin="1,0"
                   Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
-                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+                  FontFamily="Segoe UI" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
           <Button Grid.Column="3" Name="Scale3Button" Content="3x" Margin="1,0"
                   Foreground="#FFE8F4FF" Background="#FF0D1A27" BorderBrush="#FF527CA4"
-                  FontFamily="Consolas" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
+                  FontFamily="Segoe UI" FontSize="10" Padding="2" Cursor="Hand" Focusable="False" />
         </Grid>
         <Border Height="1" Background="#664C7199" Margin="0,5,0,4" />
         <CheckBox Name="LockPositionCheckBox" Content="Lock position" Foreground="#FFE8F4FF"
-                  FontFamily="Consolas" FontSize="10" Cursor="Hand" Focusable="False" />
+                  FontFamily="Segoe UI" FontSize="10" Cursor="Hand" Focusable="False" />
       </StackPanel>
     </Border>
   </Canvas>
@@ -364,11 +366,15 @@ $DragHandle.IsHitTestVisible = $true
 $MassPanel.IsHitTestVisible = $true
 $DetailsPanel.IsHitTestVisible = $true
 
-$CenterX = 310.0
-$CenterY = 165.0
+$CanvasWidth = 1080.0
+$CanvasHeight = 760.0
+$CenterX = 540.0
+$CenterY = 380.0
+$VisualCenterX = 310.0
+$VisualCenterY = 165.0
 $Random = New-Object System.Random 164
 $StarDots = @()
-for ($index = 0; $index -lt 32; $index++) {
+for ($index = 0; $index -lt 18; $index++) {
     $dot = New-Object Windows.Shapes.Ellipse
     $size = 1.0 + $Random.NextDouble() * 2.2
     $dot.Width = $size
@@ -382,17 +388,16 @@ for ($index = 0; $index -lt 32; $index++) {
 }
 
 $RayLines = @()
-for ($index = 0; $index -lt 48; $index++) {
+for ($index = 0; $index -lt 28; $index++) {
     $line = New-Object Windows.Shapes.Line
     $line.StrokeThickness = if ($index % 12 -eq 0) { 3.2 } elseif ($index % 4 -eq 0) { 1.8 } else { 0.9 }
-    if ($index % 4 -eq 0) { $line.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 2.5 } }
     $line.Opacity = 0.0
     [void]$Rays.Children.Add($line)
     $RayLines += $line
 }
 
 $ParticleDots = @()
-for ($index = 0; $index -lt 72; $index++) {
+for ($index = 0; $index -lt 36; $index++) {
     $dot = New-Object Windows.Shapes.Ellipse
     $size = 1.2 + ($index % 5) * 0.55
     $dot.Width = $size
@@ -404,7 +409,7 @@ for ($index = 0; $index -lt 72; $index++) {
 }
 
 $SurfaceBands = @()
-for ($index = 0; $index -lt 18; $index++) {
+for ($index = 0; $index -lt 10; $index++) {
     $band = New-Object Windows.Shapes.Ellipse
     $band.Fill = [Windows.Media.Brushes]::Transparent
     $band.StrokeThickness = 0.8 + ($index % 4) * 0.55
@@ -412,7 +417,6 @@ for ($index = 0; $index -lt 18; $index++) {
     foreach ($dash in @(1.0, (2.0 + $index % 3), (5.0 + $index % 5), 2.0)) { [void]$band.StrokeDashArray.Add($dash) }
     $band.RenderTransformOrigin = New-Object Windows.Point(0.5, 0.5)
     $band.RenderTransform = New-Object Windows.Media.RotateTransform
-    if ($index % 3 -eq 0) { $band.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.4 } }
     $band.Opacity = 0.0
     [void]$Surface.Children.Add($band)
     $SurfaceBands += $band
@@ -420,14 +424,13 @@ for ($index = 0; $index -lt 18; $index++) {
 
 $SurfaceDots = @()
 $SurfaceSeeds = @()
-for ($index = 0; $index -lt 52; $index++) {
+for ($index = 0; $index -lt 26; $index++) {
     $spot = New-Object Windows.Shapes.Ellipse
     $size = 2.0 + $Random.NextDouble() * 6.0
     $spot.Width = $size
     $spot.Height = $size * (0.55 + $Random.NextDouble() * 0.45)
     $spot.Fill = [Windows.Media.Brushes]::White
     $spot.Opacity = 0.0
-    if ($index % 3 -ne 0) { $spot.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.0 + $Random.NextDouble() * 1.8 } }
     [void]$Surface.Children.Add($spot)
     $SurfaceDots += $spot
     $SurfaceSeeds += [pscustomobject]@{
@@ -439,7 +442,7 @@ for ($index = 0; $index -lt 52; $index++) {
 }
 
 $ProminenceRings = @()
-for ($index = 0; $index -lt 9; $index++) {
+for ($index = 0; $index -lt 5; $index++) {
     $ring = New-Object Windows.Shapes.Ellipse
     $ring.Fill = [Windows.Media.Brushes]::Transparent
     $ring.StrokeThickness = 1.4 + ($index % 3) * 0.8
@@ -454,7 +457,6 @@ for ($index = 0; $index -lt 9; $index++) {
     }
     $ring.RenderTransformOrigin = New-Object Windows.Point(0.5, 0.5)
     $ring.RenderTransform = New-Object Windows.Media.RotateTransform
-    $ring.Effect = New-Object Windows.Media.Effects.BlurEffect -Property @{ Radius = 1.2 + ($index % 3) }
     $ring.Opacity = 0.0
     [void]$Prominences.Children.Add($ring)
     $ProminenceRings += $ring
@@ -499,8 +501,8 @@ function Get-RadialBrush([string]$CenterColor, [string]$EdgeColor) {
 function Set-CenteredSize($Element, [double]$Width, [double]$Height) {
     $Element.Width = $Width
     $Element.Height = $Height
-    [Windows.Controls.Canvas]::SetLeft($Element, $CenterX - $Width / 2.0)
-    [Windows.Controls.Canvas]::SetTop($Element, $CenterY - $Height / 2.0)
+    [Windows.Controls.Canvas]::SetLeft($Element, $VisualCenterX - $Width / 2.0)
+    [Windows.Controls.Canvas]::SetTop($Element, $VisualCenterY - $Height / 2.0)
 }
 
 function Get-Stage([double]$Level) {
@@ -547,8 +549,8 @@ function New-CoronaGeometry([double]$Radius, [int]$Points, [double]$Phase, [doub
                      0.17 * [Math]::Sin($angle * 31.0 + $Phase * 0.63)
             $cardinal = [Math]::Pow([Math]::Abs([Math]::Cos($angle * 2.0)), 18.0)
             $radiusAtPoint = $Radius * (1.0 + $Turbulence * $noise + $Turbulence * 1.7 * $cardinal)
-            $pointX = $CenterX + [Math]::Cos($angle) * $radiusAtPoint
-            $pointY = $CenterY + [Math]::Sin($angle) * $radiusAtPoint
+            $pointX = $VisualCenterX + [Math]::Cos($angle) * $radiusAtPoint
+            $pointY = $VisualCenterY + [Math]::Sin($angle) * $radiusAtPoint
             $point = New-Object Windows.Point($pointX, $pointY)
             if ($index -eq 0) { $context.BeginFigure($point, $true, $true) }
             else { $context.LineTo($point, $true, $false) }
@@ -589,25 +591,50 @@ function Get-RateSummary {
     return ("5H %{0} | {1}" -f [Math]::Round($used), (Format-ResetRemaining ([long]$fiveHour.resets_at)))
 }
 
+function Format-UiText([string]$Value, [string]$Fallback = "--") {
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $Fallback }
+    $ascii = [regex]::Replace($Value, "[^\x20-\x7E]", " ")
+    $clean = [regex]::Replace($ascii, "\s+", " ").Trim()
+    if ([string]::IsNullOrWhiteSpace($clean)) { return $Fallback }
+    if ($clean.Length -gt 36) { return $clean.Substring(0, 33).TrimEnd() + "..." }
+    return $clean
+}
+
+function Format-Effort([string]$Value) {
+    $clean = Format-UiText $Value ""
+    switch ($clean.ToLowerInvariant()) {
+        "low" { return "Low" }
+        "medium" { return "Medium" }
+        "high" { return "High" }
+        "xhigh" { return "Extra high" }
+        "max" { return "Max" }
+        "" { return "--" }
+        default { return $clean }
+    }
+}
+
 function Get-SessionSummary {
     $parts = @()
     if (-not [string]::IsNullOrWhiteSpace([string]$State.model)) {
-        $parts += [string]$State.model
+        $model = Format-UiText ([string]$State.model)
+        if ($model.Length -gt 18) { $model = $model.Substring(0, 15).TrimEnd() + "..." }
+        $parts += $model
     }
     if (-not [string]::IsNullOrWhiteSpace([string]$State.effort)) {
-        $parts += ([string]$State.effort).ToUpperInvariant()
+        $parts += (Format-Effort ([string]$State.effort))
     }
-    return $parts -join " · "
+    return $parts -join " / "
 }
 
 function Get-DetailsText {
     $breakdown = $State.breakdown
     $limits = $State.rate_limits
-    $model = if ([string]::IsNullOrWhiteSpace([string]$State.model)) { "--" } else { [string]$State.model }
-    $effort = if ([string]::IsNullOrWhiteSpace([string]$State.effort)) { "--" } else { ([string]$State.effort).ToUpperInvariant() }
+    $model = Format-UiText ([string]$State.model)
+    $effort = Format-Effort ([string]$State.effort)
     return @(
         "Model           $model"
         "Effort          $effort"
+        "Active sessions $([Math]::Max(0, [int]$State.active_sessions))"
         ""
         "Total input     $(Format-TokenDetail (Get-BreakdownToken $breakdown 'total_input_tokens' 0L))"
         "Cache read      $(Format-TokenDetail (Get-BreakdownToken $breakdown 'cache_read_input_tokens' 0L))"
@@ -621,7 +648,7 @@ function Get-DetailsText {
 
 $EmptyBreakdown = [pscustomobject]@{ total_input_tokens = 0L; cache_read_input_tokens = 0L; context_window_size = 0L; remaining_tokens = 0L }
 $EmptyRateLimits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L }; seven_day = [pscustomobject]@{ used_percentage = -1.0; resets_at = 0L } }
-$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; model = ""; effort = ""; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
+$State = [pscustomobject]@{ level = 0.0; tokens = 0L; active = $false; stage = "RED DWARF"; project_root = ""; project_name = ""; model = ""; effort = ""; active_sessions = 0; breakdown = $EmptyBreakdown; rate_limits = $EmptyRateLimits }
 $LastStateWrite = [datetime]::MinValue
 $OverlayPosition = [pscustomobject]@{ x = 0.96; y = 0.06 }
 $LastHostWindow = $null
@@ -639,6 +666,7 @@ $CachedForegroundHandle = [IntPtr]::Zero
 $CachedHostWindow = $null
 $NextHostRefresh = 0.0
 $NextCoronaUpdate = 0.0
+$WorkingSetTrimmed = $false
 
 if (Test-Path -LiteralPath $PositionPath) {
     try {
@@ -681,8 +709,9 @@ function Read-TokenState {
             stage = Get-Stage $demoNormalized
             project_root = ""
             project_name = ""
-            model = "Opus"
-            effort = "high"
+            model = "Opus 5"
+            effort = "xhigh"
+            active_sessions = 2
             breakdown = [pscustomobject]@{ total_input_tokens = $demoTokens; cache_read_input_tokens = [long][Math]::Round($demoTokens * 0.70); context_window_size = 200000L; remaining_tokens = 200000L - $demoTokens }
             rate_limits = [pscustomobject]@{ five_hour = [pscustomobject]@{ used_percentage = 61.0; resets_at = $demoReset }; seven_day = [pscustomobject]@{ used_percentage = 34.0; resets_at = [DateTimeOffset]::UtcNow.AddDays(3).ToUnixTimeSeconds() } }
         }
@@ -710,6 +739,7 @@ function Read-TokenState {
             project_name = [string]$value.project_name
             model = [string]$value.model
             effort = [string]$value.effort
+            active_sessions = if ($value.PSObject.Properties['active_sessions']) { [Math]::Max(0, [int]$value.active_sessions) } elseif ([bool]$value.active) { 1 } else { 0 }
             breakdown = $breakdown
             rate_limits = $rateLimits
         }
@@ -878,7 +908,7 @@ $ScaleButtonActive = New-Object Windows.Media.SolidColorBrush((Convert-Color "#F
 function Apply-StarScale([double]$Level = 0.0) {
     $multiplier = Get-DisplayScale $Level
     if ([Math]::Abs($multiplier - $script:LastAppliedDisplayScale) -gt 0.000001) {
-        $VisualLayer.RenderTransform = [Windows.Media.ScaleTransform]::new($multiplier, $multiplier, $CenterX, $CenterY)
+        $VisualLayer.RenderTransform = [Windows.Media.ScaleTransform]::new($multiplier, $multiplier, $VisualCenterX, $VisualCenterY)
         $script:LastAppliedDisplayScale = $multiplier
     }
     foreach ($entry in @(
@@ -1050,6 +1080,8 @@ function Toggle-DetailsPanel {
     $DetailsPanel.Visibility = if ($script:DetailsOpen) { "Visible" } else { "Collapsed" }
     $DetailsPanel.Opacity = if ($script:DetailsOpen) { 1.0 } else { 0.0 }
     $MassPanel.Opacity = if ($script:InteractivePanelActive) { 0.96 } else { 0.46 }
+    $script:LastMassLayoutKey = ""
+    Update-Visual
     if ($script:LastHostWindow -and $script:LastHostWindow.Handle) {
         [void][TokenStarNative]::SetForegroundWindow($script:LastHostWindow.Handle)
     }
@@ -1082,9 +1114,16 @@ function Update-Visual {
         return
     }
     $time = $Stopwatch.Elapsed.TotalSeconds
+    if (-not $script:WorkingSetTrimmed -and $time -ge 4.0) {
+        $script:WorkingSetTrimmed = $true
+        [GC]::Collect()
+        [GC]::WaitForPendingFinalizers()
+        try { [void][TokenStarNative]::EmptyWorkingSet(([Diagnostics.Process]::GetCurrentProcess()).Handle) }
+        catch { }
+    }
     if ($time -ge $script:NextStatePoll) {
         Read-TokenState
-        $script:NextStatePoll = $time + 0.25
+        $script:NextStatePoll = $time + 0.75
     }
     $level = [double]$State.level
     $stage = Get-EffectiveStage $level
@@ -1097,7 +1136,7 @@ function Update-Visual {
     $MassPanel.IsHitTestVisible = $visible -or $SelfTest
     $DetailsPanel.IsHitTestVisible = ($visible -or $SelfTest) -and $script:DetailsOpen
     if ($script:Timer) {
-        $targetInterval = if ($visible) { 80 } else { 250 }
+        $targetInterval = if ($visible) { 150 } else { 1000 }
         if ($script:Timer.Interval.TotalMilliseconds -ne $targetInterval) {
             $script:Timer.Interval = [TimeSpan]::FromMilliseconds($targetInterval)
         }
@@ -1127,7 +1166,11 @@ function Update-Visual {
     }
     $starMultiplier = Get-DisplayScale $level
     $displayDiameter = $diameter * $starMultiplier
-    Set-CenteredSize $DragHandle ([Math]::Max(28.0, $displayDiameter)) ([Math]::Max(28.0, $displayDiameter))
+    $dragSize = [Math]::Max(28.0, $displayDiameter)
+    $DragHandle.Width = $dragSize
+    $DragHandle.Height = $dragSize
+    [Windows.Controls.Canvas]::SetLeft($DragHandle, $CenterX - $dragSize / 2.0)
+    [Windows.Controls.Canvas]::SetTop($DragHandle, $CenterY - $dragSize / 2.0)
     $colors = switch ($stage) {
         "RED DWARF" { @("#FFFF7A32", "#FF6D0702", "#001D0000") }
         "MAIN SEQUENCE" { @("#FFFFE89A", "#FFD95A09", "#002E0900") }
@@ -1151,10 +1194,10 @@ function Update-Visual {
     $Nebula.Opacity = if ($isNormal) { 0.28 + 0.12 * [Math]::Sin($time * 1.7) } elseif ($isNeutron) { 0.42 } else { 0.0 }
 
     if ($isNormal -and $time -ge $script:NextCoronaUpdate) {
-        $script:NextCoronaUpdate = $time + 0.18
+        $script:NextCoronaUpdate = $time + 0.30
         $coreRadius = $diameter / 2.0
-        $CoronaShellOuter.Data = New-CoronaGeometry ($coreRadius * 2.18) 96 ($time * 0.72) (0.18 + 0.10 * $level)
-        $CoronaShellInner.Data = New-CoronaGeometry ($coreRadius * 1.48) 96 (-$time * 1.08) (0.13 + 0.08 * $level)
+        $CoronaShellOuter.Data = New-CoronaGeometry ($coreRadius * 2.18) 56 ($time * 0.72) (0.18 + 0.10 * $level)
+        $CoronaShellInner.Data = New-CoronaGeometry ($coreRadius * 1.48) 56 (-$time * 1.08) (0.13 + 0.08 * $level)
         $CoronaShellOuter.Fill = Get-RadialBrush $colors[0] $colors[2]
         $CoronaShellInner.Fill = Get-RadialBrush $colors[0] $colors[2]
         $CoronaShellOuter.Stroke = Get-SolidBrush $colors[0]
@@ -1208,10 +1251,10 @@ function Update-Visual {
         $flareGain = if ($index % 12 -eq 0) { 3.8 + 1.3 * $level } elseif ($index % 4 -eq 0) { 2.0 + 0.8 * $level } else { 1.25 + 0.75 * $level }
         $outer = $rayRadius * ($flareGain + 0.42 * [Math]::Sin($time * 2.1 + $index * 1.7))
         $line = $RayLines[$index]
-        $line.X1 = $CenterX + [Math]::Cos($radians) * $inner
-        $line.Y1 = $CenterY + [Math]::Sin($radians) * $inner
-        $line.X2 = $CenterX + [Math]::Cos($radians) * $outer
-        $line.Y2 = $CenterY + [Math]::Sin($radians) * $outer
+        $line.X1 = $VisualCenterX + [Math]::Cos($radians) * $inner
+        $line.Y1 = $VisualCenterY + [Math]::Sin($radians) * $inner
+        $line.X2 = $VisualCenterX + [Math]::Cos($radians) * $outer
+        $line.Y2 = $VisualCenterY + [Math]::Sin($radians) * $outer
         $line.Stroke = $stageBrush
         $line.Opacity = if ($isNormal) { $(if ($index % 12 -eq 0) { 0.68 } elseif ($index % 4 -eq 0) { 0.46 } else { 0.22 + 0.30 * $level }) } else { 0.0 }
     }
@@ -1222,8 +1265,8 @@ function Update-Visual {
             $seed = $SurfaceSeeds[$index]
             $angle = [double]$seed.angle + $time * [double]$seed.speed
             $radius = $diameter * 0.43 * [double]$seed.radius
-            [Windows.Controls.Canvas]::SetLeft($spot, $CenterX + [Math]::Cos($angle) * $radius - $spot.Width / 2.0)
-            [Windows.Controls.Canvas]::SetTop($spot, $CenterY + [Math]::Sin($angle) * $radius - $spot.Height / 2.0)
+        [Windows.Controls.Canvas]::SetLeft($spot, $VisualCenterX + [Math]::Cos($angle) * $radius - $spot.Width / 2.0)
+        [Windows.Controls.Canvas]::SetTop($spot, $VisualCenterY + [Math]::Sin($angle) * $radius - $spot.Height / 2.0)
             $spot.Fill = if ($index % 7 -eq 0) { [Windows.Media.Brushes]::White } elseif ($index % 3 -eq 0) { $surfaceAccent } else { $stageBrush }
             $spot.Opacity = 0.07 + 0.24 * (0.5 + 0.5 * [Math]::Sin($time * 1.7 + [double]$seed.phase))
         }
@@ -1308,8 +1351,8 @@ function Update-Visual {
             $travel = ($time * (0.16 + ($index % 5) * 0.018) + $index * 0.6180339) % 1.0
             $angle = $index * 2.39996 + $time * (0.16 + $level * 0.25)
             $radius = $diameter * (0.50 + 1.85 * $travel)
-            [Windows.Controls.Canvas]::SetLeft($dot, $CenterX + [Math]::Cos($angle) * $radius - $dot.Width / 2.0)
-            [Windows.Controls.Canvas]::SetTop($dot, $CenterY + [Math]::Sin($angle) * $radius - $dot.Height / 2.0)
+            [Windows.Controls.Canvas]::SetLeft($dot, $VisualCenterX + [Math]::Cos($angle) * $radius - $dot.Width / 2.0)
+            [Windows.Controls.Canvas]::SetTop($dot, $VisualCenterY + [Math]::Sin($angle) * $radius - $dot.Height / 2.0)
             $dot.Fill = $stageBrush
             $dot.Opacity = (1.0 - $travel) * (0.38 + 0.55 * $level)
         }
@@ -1318,8 +1361,8 @@ function Update-Visual {
             $distance = ($travel - 0.5) * 390.0
             $radians = $NeutronAngle * [Math]::PI / 180.0
             $jitter = [Math]::Sin($time * 18.0 + $index) * 2.5
-            $x = $CenterX + [Math]::Cos($radians) * $distance - [Math]::Sin($radians) * $jitter
-            $y = $CenterY + [Math]::Sin($radians) * $distance + [Math]::Cos($radians) * $jitter
+            $x = $VisualCenterX + [Math]::Cos($radians) * $distance - [Math]::Sin($radians) * $jitter
+            $y = $VisualCenterY + [Math]::Sin($radians) * $distance + [Math]::Cos($radians) * $jitter
             [Windows.Controls.Canvas]::SetLeft($dot, $x - $dot.Width / 2.0)
             [Windows.Controls.Canvas]::SetTop($dot, $y - $dot.Height / 2.0)
             $dot.Fill = [Windows.Media.Brushes]::White
@@ -1333,8 +1376,8 @@ function Update-Visual {
                 $x0 = [Math]::Cos($angle) * $radius
                 $y0 = [Math]::Sin($angle) * (13.0 + ($index % 5) * 2.8)
                 $tilt = -12.0 * [Math]::PI / 180.0
-                $x = $CenterX + $x0 * [Math]::Cos($tilt) - $y0 * [Math]::Sin($tilt)
-                $y = $CenterY + $x0 * [Math]::Sin($tilt) + $y0 * [Math]::Cos($tilt)
+            $x = $VisualCenterX + $x0 * [Math]::Cos($tilt) - $y0 * [Math]::Sin($tilt)
+            $y = $VisualCenterY + $x0 * [Math]::Sin($tilt) + $y0 * [Math]::Cos($tilt)
                 [Windows.Controls.Canvas]::SetLeft($dot, $x - $dot.Width / 2.0)
                 [Windows.Controls.Canvas]::SetTop($dot, $y - $dot.Height / 2.0)
                 $dot.Fill = if ($index % 3 -eq 0) { [Windows.Media.Brushes]::White } elseif ($index % 3 -eq 1) { [Windows.Media.Brushes]::DeepPink } else { [Windows.Media.Brushes]::Orange }
@@ -1345,8 +1388,8 @@ function Update-Visual {
                 $distance = ($travel - 0.5) * 350.0
                 $axis = -102.0 * [Math]::PI / 180.0
                 $jitter = [Math]::Sin($time * 22.0 + $index) * (4.0 + 8.0 * [Math]::Abs($travel - 0.5))
-                $x = $CenterX + [Math]::Cos($axis) * $distance - [Math]::Sin($axis) * $jitter
-                $y = $CenterY + [Math]::Sin($axis) * $distance + [Math]::Cos($axis) * $jitter
+            $x = $VisualCenterX + [Math]::Cos($axis) * $distance - [Math]::Sin($axis) * $jitter
+            $y = $VisualCenterY + [Math]::Sin($axis) * $distance + [Math]::Cos($axis) * $jitter
                 [Windows.Controls.Canvas]::SetLeft($dot, $x - $dot.Width / 2.0)
                 [Windows.Controls.Canvas]::SetTop($dot, $y - $dot.Height / 2.0)
                 $dot.Fill = [Windows.Media.Brushes]::White
@@ -1367,14 +1410,17 @@ function Update-Visual {
         $DetailsText.Text = $detailsContent
     }
     $positionKey = "{0},{1}" -f [Math]::Round($Window.Left), [Math]::Round($Window.Top)
-    $massLayoutKey = "$massLabel|$stage|$secondarySummary|$($script:StarScaleLevel)|$($script:GrowWithTokens)|$positionKey"
+        $massLayoutKey = "$massLabel|$stage|$secondarySummary|$($script:StarScaleLevel)|$($script:GrowWithTokens)|$($script:DetailsOpen)|$positionKey"
     if ($massLayoutKey -ne $script:LastMassLayoutKey) {
         $script:LastMassLayoutKey = $massLayoutKey
         $MassText.Text = $massLabel
         $RateText.Text = " | $secondarySummary"
         $MassPanel.Width = [double]::NaN
         $MassPanel.Measure((New-Object Windows.Size([double]::PositiveInfinity, [double]::PositiveInfinity)))
+        $detailsWasCollapsed = $DetailsPanel.Visibility -eq "Collapsed"
+        if ($detailsWasCollapsed) { $DetailsPanel.Visibility = "Hidden" }
         $DetailsPanel.Measure((New-Object Windows.Size($DetailsPanel.Width, [double]::PositiveInfinity)))
+        if ($detailsWasCollapsed) { $DetailsPanel.Visibility = "Collapsed" }
         $panelWidth = [Math]::Max(112.0, $MassPanel.DesiredSize.Width)
         $visibleLeft = 4.0
         $visibleTop = 4.0
@@ -1387,24 +1433,39 @@ function Update-Visual {
             $visibleRight = [Math]::Min($visibleRight, $hostWindow.Rect.Right / $hostScale - $Window.Left - 4.0)
             $visibleBottom = [Math]::Min($visibleBottom, $hostWindow.Rect.Bottom / $hostScale - $Window.Top - 4.0)
         }
-        $idealPanelLeft = $CenterX - $panelWidth / 2.0
-        $panelLeft = [Math]::Max($visibleLeft, [Math]::Min($visibleRight - $panelWidth, $idealPanelLeft))
-        $panelDistance = [Math]::Max(30.0, $displayDiameter * 0.70)
-        $idealPanelTop = $CenterY + $panelDistance
-        $panelTop = if ($idealPanelTop + $MassPanel.DesiredSize.Height -le $visibleBottom) {
-            $idealPanelTop
+        $stackWidth = [Math]::Max($panelWidth, [double]$DetailsPanel.Width)
+        $visualClearance = switch ($stage) {
+            "RED DWARF" { 105.0 }
+            "MAIN SEQUENCE" { 145.0 }
+            "BLUE GIANT" { 185.0 }
+            "HYPERGIANT" { 205.0 }
+            "NEUTRON STAR" { 220.0 }
+            default { 180.0 }
         }
-        else { [Math]::Max($visibleTop, $CenterY - $panelDistance - $MassPanel.DesiredSize.Height) }
+        $visualClearance = [Math]::Max(48.0, $visualClearance * $starMultiplier)
+        $panelHeight = [double]$MassPanel.DesiredSize.Height
+        $detailsHeight = [double]$DetailsPanel.DesiredSize.Height
+        $gap = 7.0
+        $stackHeight = $panelHeight + $(if ($script:DetailsOpen) { $gap + $detailsHeight } else { 0.0 })
+        $rightLeft = $CenterX + $visualClearance + 12.0
+        $leftLeft = $CenterX - $visualClearance - 12.0 - $stackWidth
+        $fitsRight = $rightLeft + $stackWidth -le $visibleRight
+        $fitsLeft = $leftLeft -ge $visibleLeft
+        $placeRight = if ($fitsRight -and $fitsLeft) {
+            ($visibleRight - $CenterX) -ge ($CenterX - $visibleLeft)
+        }
+        else { $fitsRight -or -not $fitsLeft }
+        $stackLeft = if ($placeRight) { $rightLeft } else { $leftLeft }
+        $stackLeft = [Math]::Max($visibleLeft, [Math]::Min($visibleRight - $stackWidth, $stackLeft))
+        $stackTop = $CenterY - $stackHeight / 2.0
+        $stackTop = [Math]::Max($visibleTop, [Math]::Min($visibleBottom - $stackHeight, $stackTop))
+        $panelLeft = $stackLeft + ($stackWidth - $panelWidth) / 2.0
+        $detailsLeft = $stackLeft + ($stackWidth - [double]$DetailsPanel.Width) / 2.0
+        $panelTop = $stackTop
+        $detailsTop = $panelTop + $panelHeight + $gap
         [Windows.Controls.Canvas]::SetLeft($MassPanel, $panelLeft)
         [Windows.Controls.Canvas]::SetTop($MassPanel, $panelTop)
-        $idealDetailsLeft = $CenterX - $DetailsPanel.Width / 2.0
-        $detailsLeft = [Math]::Max($visibleLeft, [Math]::Min($visibleRight - $DetailsPanel.Width, $idealDetailsLeft))
         [Windows.Controls.Canvas]::SetLeft($DetailsPanel, $detailsLeft)
-        $detailsBelow = $panelTop + $MassPanel.DesiredSize.Height + 5.0
-        $detailsTop = if ($detailsBelow + $DetailsPanel.DesiredSize.Height -gt $visibleBottom) {
-            [Math]::Max($visibleTop, $panelTop - $DetailsPanel.DesiredSize.Height - 5.0)
-        }
-        else { $detailsBelow }
         [Windows.Controls.Canvas]::SetTop($DetailsPanel, $detailsTop)
     }
     $MassPanel.Opacity = if ($visible -or $SelfTest) {
@@ -1479,8 +1540,9 @@ if ($SelfTest) {
     if (-not (Test-PointOverElement $panelPoint $MassPanel 0.0)) {
         throw "Token Star overlay auto-sized panel hit-test self-test failed."
     }
-    if ([Math]::Abs(($panelLeft + $MassPanel.DesiredSize.Width / 2.0) - $CenterX) -gt 1.0) {
-        throw "Token Star overlay centered-panel layout self-test failed."
+    $panelRight = $panelLeft + $MassPanel.DesiredSize.Width
+    if ($panelLeft -lt ($CenterX + 48.0) -and $panelRight -gt ($CenterX - 48.0)) {
+        throw "Token Star overlay separated-panel layout self-test failed."
     }
     $travelRect = New-Object TokenStarNative+RECT
     $travelRect.Left = 0; $travelRect.Top = 0; $travelRect.Right = 1200; $travelRect.Bottom = 800
@@ -1492,14 +1554,15 @@ if ($SelfTest) {
     if (-not $script:DetailsOpen -or $DetailsPanel.Visibility -ne "Visible") {
         throw "Token Star overlay details dropdown self-test failed."
     }
-    if ($DetailsText.Text -notmatch "Model\s+Opus" -or $DetailsText.Text -notmatch "Effort\s+HIGH") {
+    if ($DetailsText.Text -notmatch "Model\s+Opus 5" -or $DetailsText.Text -notmatch "Effort\s+Extra high" -or
+        $DetailsText.Text -notmatch "Active sessions\s+2") {
         throw "Token Star overlay model/effort self-test failed."
     }
     if ($MassText.Text -notmatch "MASS 190K / 200K") {
         throw "Token Star overlay used/available token self-test failed."
     }
-    $Root.Measure((New-Object Windows.Size(500, 500)))
-    $Root.Arrange((New-Object Windows.Rect(0, 0, 500, 500)))
+    $Root.Measure((New-Object Windows.Size($CanvasWidth, $CanvasHeight)))
+    $Root.Arrange((New-Object Windows.Rect(0, 0, $CanvasWidth, $CanvasHeight)))
     $Root.UpdateLayout()
     $detailsPoint = New-Object Windows.Point(
         ([Windows.Controls.Canvas]::GetLeft($DetailsPanel) + $DetailsPanel.ActualWidth / 2.0),
@@ -1507,6 +1570,13 @@ if ($SelfTest) {
     )
     if (-not (Test-PointOverElement $detailsPoint $DetailsPanel 0.0)) {
         throw "Token Star overlay details-panel hit-test self-test failed."
+    }
+    $detailsLeft = [Windows.Controls.Canvas]::GetLeft($DetailsPanel)
+    $detailsRight = $detailsLeft + $DetailsPanel.ActualWidth
+    $detailsSafetyRadius = [Math]::Max(48.0, 160.0 * (Get-DisplayScale ([double]$State.level)))
+    if ($detailsLeft -lt ($CenterX + $detailsSafetyRadius) -and
+        $detailsRight -gt ($CenterX - $detailsSafetyRadius)) {
+        throw "Token Star overlay details panel overlaps the star safety zone."
     }
     Set-GrowWithTokens $false $false
     Set-StageMode "AUTO" $false
@@ -1555,10 +1625,10 @@ if ($SelfTest) {
         $captureBackground = $Root.Background
         try {
             $Root.Background = Get-SolidBrush "#FF070B12"
-            $Root.Measure((New-Object Windows.Size(500, 500)))
-            $Root.Arrange((New-Object Windows.Rect(0, 0, 500, 500)))
+            $Root.Measure((New-Object Windows.Size($CanvasWidth, $CanvasHeight)))
+            $Root.Arrange((New-Object Windows.Rect(0, 0, $CanvasWidth, $CanvasHeight)))
             $Root.UpdateLayout()
-            $bitmap = New-Object Windows.Media.Imaging.RenderTargetBitmap(500, 500, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+            $bitmap = New-Object Windows.Media.Imaging.RenderTargetBitmap([int]$CanvasWidth, [int]$CanvasHeight, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
             $bitmap.Render($Root)
             $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder
             $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
@@ -1580,16 +1650,11 @@ if ($SelfTest) {
 [GC]::Collect()
 
 $Timer = New-Object Windows.Threading.DispatcherTimer
-$Timer.Interval = [TimeSpan]::FromMilliseconds(80)
-$Timer.Add_Tick({ Update-Visual })
+$Timer.Interval = [TimeSpan]::FromMilliseconds(150)
+$Timer.Add_Tick({ Update-Visual; Update-HitTestMode })
 $Timer.Start()
-$HitTestTimer = New-Object Windows.Threading.DispatcherTimer
-$HitTestTimer.Interval = [TimeSpan]::FromMilliseconds(25)
-$HitTestTimer.Add_Tick({ Update-HitTestMode })
-$HitTestTimer.Start()
 try { [void]$Window.ShowDialog() }
 finally {
-    if ($script:HitTestTimer) { $script:HitTestTimer.Stop() }
     try {
         if (Test-Path -LiteralPath $PidPath) {
             $pidRecord = [IO.File]::ReadAllText($PidPath) | ConvertFrom-Json

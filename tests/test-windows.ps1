@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$WindowsSource = Join-Path $Root "src\windows"
+$ToolsRoot = Join-Path $Root "tools"
 $TemporaryRoot = Join-Path $env:TEMP ("ghostty-supernova-test-" + [guid]::NewGuid().ToString("N"))
 $ClaudeSettings = Join-Path $TemporaryRoot ".claude\settings.json"
 $TerminalSettings = Join-Path $TemporaryRoot "terminal\settings.json"
@@ -67,11 +69,18 @@ try {
     }
     [System.IO.File]::WriteAllText($LegacyState, ($legacyInstall | ConvertTo-Json -Depth 20), $Utf8NoBom)
 
-    foreach ($file in @("install.ps1", "uninstall.ps1", "preview.ps1", "token-test.ps1", "token-mass-windows.ps1", "token-star-overlay.ps1")) {
+    foreach ($file in @(
+        (Join-Path $WindowsSource "install.ps1"),
+        (Join-Path $WindowsSource "uninstall.ps1"),
+        (Join-Path $ToolsRoot "preview.ps1"),
+        (Join-Path $ToolsRoot "token-test.ps1"),
+        (Join-Path $WindowsSource "token-mass-windows.ps1"),
+        (Join-Path $WindowsSource "token-star-overlay.ps1")
+    )) {
         $tokens = $null
         $parseErrors = $null
         [System.Management.Automation.Language.Parser]::ParseFile(
-            (Join-Path $Root $file), [ref]$tokens, [ref]$parseErrors
+            $file, [ref]$tokens, [ref]$parseErrors
         ) | Out-Null
         Assert-True ($parseErrors.Count -eq 0) "$file has PowerShell syntax errors"
     }
@@ -83,17 +92,17 @@ try {
         $Utf8NoBom
     )
     $overlayTest = & powershell.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass `
-        -File (Join-Path $Root "token-star-overlay.ps1") -SelfTest -Demo `
+        -File (Join-Path $WindowsSource "token-star-overlay.ps1") -SelfTest -Demo `
         -PositionPath $overlaySelfTestPosition
     Assert-True ($LASTEXITCODE -eq 0) "IDE overlay self-test failed"
     Assert-True (($overlayTest -join "") -match "self-test OK") "IDE overlay self-test output is wrong"
 
     $previewPort = 42000 + (Get-Random -Minimum 0 -Maximum 1000)
-    $previewTest = & (Join-Path $Root "preview.ps1") -Port $previewPort -Test
+    $previewTest = & (Join-Path $ToolsRoot "preview.ps1") -Port $previewPort -Test
     Assert-True (($previewTest -join "") -match "lifecycle test OK") "local preview lifecycle test failed"
     Assert-True (-not (Get-NetTCPConnection -LocalPort $previewPort -State Listen -ErrorAction SilentlyContinue)) "preview server was left running"
 
-    & (Join-Path $Root "install.ps1") `
+    & (Join-Path $WindowsSource "install.ps1") `
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
@@ -103,7 +112,7 @@ try {
     Assert-True ($LASTEXITCODE -eq 0) "installer returned a failure"
 
     # Reinstall must not duplicate hooks or overwrite the original backup.
-    & (Join-Path $Root "install.ps1") `
+    & (Join-Path $WindowsSource "install.ps1") `
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
@@ -131,7 +140,7 @@ try {
 
     function global:claude { $global:TokenStarUnexpectedClaudeLaunch = $true }
     $global:TokenStarUnexpectedClaudeLaunch = $false
-    & (Join-Path $Root "install.ps1") `
+    & (Join-Path $WindowsSource "install.ps1") `
         -ClaudeSettings $ClaudeSettings `
         -TerminalSettings $TerminalSettings `
         -RuntimeRoot $RuntimeRoot `
@@ -143,11 +152,18 @@ try {
 
     $bridge = Join-Path $RuntimeRoot "token-mass-windows.ps1"
     $generated = Join-Path $RuntimeRoot "supernova-windows.generated.hlsl"
+    & $bridge -Off | Out-Null
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled"))) `
+        "off command did not persistently disable the overlay"
+    & $bridge -On | Out-Null
+    Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) `
+        "on command did not re-enable the overlay"
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
     $before = (Get-Item -LiteralPath $TerminalSettings).LastWriteTimeUtc
     Start-Sleep -Milliseconds 20
     $fiveHourReset = [DateTimeOffset]::UtcNow.AddHours(2).AddMinutes(23).ToUnixTimeSeconds()
     $statusPayload = [ordered]@{
+        session_id = "session-high"
         workspace = [ordered]@{ project_dir = $ScopedProject; current_dir = $ScopedProject }
         context_window = [ordered]@{
             used_percentage = 95
@@ -192,6 +208,30 @@ try {
     Assert-True ([double]$overlayState.rate_limits.five_hour.used_percentage -eq 61) "five-hour percentage is wrong"
     Assert-True ([long]$overlayState.rate_limits.five_hour.resets_at -eq $fiveHourReset) "five-hour reset is wrong"
 
+    $lowerSessionPayload = [ordered]@{
+        session_id = "session-low"
+        workspace = [ordered]@{ project_dir = $ScopedProject; current_dir = $ScopedProject }
+        context_window = [ordered]@{ used_percentage = 40; total_input_tokens = 80000; context_window_size = 200000 }
+        model = [ordered]@{ display_name = "Sonnet" }
+        effort = [ordered]@{ level = "medium" }
+    }
+    ($lowerSessionPayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge | Out-Null
+    $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
+    Assert-True ([long]$overlayState.tokens -eq 190000) "lower-token tab replaced the highest-token tab"
+    Assert-True ([int]$overlayState.active_sessions -eq 2) "active Claude tab count is wrong"
+
+    $lowerSessionPayload.context_window.used_percentage = 98
+    $lowerSessionPayload.context_window.total_input_tokens = 196000
+    ($lowerSessionPayload | ConvertTo-Json -Depth 10 -Compress) | & $bridge | Out-Null
+    $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
+    Assert-True ([long]$overlayState.tokens -eq 196000) "highest-token tab was not selected"
+    Assert-True ($overlayState.model -eq "Sonnet") "selected tab metadata is wrong"
+
+    ([ordered]@{ hook_event_name = "SessionEnd"; session_id = "session-low"; workspace = [ordered]@{ project_dir = $ScopedProject } } | ConvertTo-Json -Compress) | & $bridge
+    $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
+    Assert-True ([long]$overlayState.tokens -eq 190000) "closing the highest-token tab did not restore the next-highest tab"
+    Assert-True ([int]$overlayState.active_sessions -eq 1) "closed Claude tab remained active"
+
     $outsidePayload = [ordered]@{
         workspace = [ordered]@{ project_dir = $OtherProject; current_dir = $OtherProject }
         context_window = [ordered]@{ used_percentage = 50; total_input_tokens = 100000; context_window_size = 200000 }
@@ -201,7 +241,7 @@ try {
     $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
     Assert-True (-not [bool]$overlayState.active) "overlay remained active in another project"
 
-    ([ordered]@{ hook_event_name = "SessionEnd"; workspace = [ordered]@{ project_dir = $ScopedProject } } | ConvertTo-Json -Compress) | & $bridge
+    ([ordered]@{ hook_event_name = "SessionEnd"; session_id = "session-high"; workspace = [ordered]@{ project_dir = $ScopedProject } } | ConvertTo-Json -Compress) | & $bridge
     $shader = [System.IO.File]::ReadAllText($generated)
     Assert-True ($shader -match "#define TOKEN_ACTIVE 0") "SessionEnd did not disable the shader"
     $overlayState = [System.IO.File]::ReadAllText($overlayStatePath) | ConvertFrom-Json
@@ -215,7 +255,7 @@ try {
     [System.IO.Directory]::CreateDirectory($hiddenClone) | Out-Null
     Push-Location -LiteralPath $hiddenClone
     try {
-        & (Join-Path $Root "install.ps1") `
+        & (Join-Path $WindowsSource "install.ps1") `
             -ClaudeSettings $ClaudeSettings `
             -TerminalSettings $TerminalSettings `
             -RuntimeRoot $RuntimeRoot `
@@ -226,7 +266,7 @@ try {
     $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
     Assert-True (Test-SameDirectoryPath ([string]$projectScope.root) $installProject) "hidden clone was incorrectly used as the project scope"
 
-    & (Join-Path $Root "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
+    & (Join-Path $WindowsSource "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json
     Assert-True ($null -ne $settings.permissions) "existing Claude settings were lost"
     Assert-True ($null -ne $settings.hooks.PSObject.Properties["PreToolUse"]) "existing hooks were lost"
@@ -245,12 +285,12 @@ try {
     $oldLocalAppData = $env:LOCALAPPDATA
     $env:LOCALAPPDATA = Join-Path $TemporaryRoot "local-app-data"
     try {
-        & (Join-Path $Root "install.ps1") `
+        & (Join-Path $WindowsSource "install.ps1") `
             -ProjectPath $ScopedProject `
             -TerminalSettings $TerminalSettings `
             -SkipVersionCheck `
             -NoLaunch | Out-Null
-        & (Join-Path $Root "install.ps1") `
+        & (Join-Path $WindowsSource "install.ps1") `
             -ProjectPath $OtherProject `
             -TerminalSettings $TerminalSettings `
             -SkipVersionCheck `
@@ -278,7 +318,7 @@ try {
         Assert-True ($profileA.profiles[0].guid -ne $profileB.profiles[0].guid) `
             "two projects shared a Windows Terminal profile GUID"
 
-        & (Join-Path $Root "uninstall.ps1") -ProjectPath $ScopedProject | Out-Null
+        & (Join-Path $WindowsSource "uninstall.ps1") -ProjectPath $ScopedProject | Out-Null
         Assert-True (-not (Test-Path -LiteralPath ([string]$stateA.runtime_root))) `
             "uninstall left project A runtime behind"
         Assert-True (Test-Path -LiteralPath ([string]$stateB.runtime_root)) `
@@ -287,7 +327,7 @@ try {
         Assert-True ($settingsBAfter.statusLine.command -eq $settingsB.statusLine.command) `
             "uninstalling project A changed project B settings"
 
-        & (Join-Path $Root "uninstall.ps1") -ProjectPath $OtherProject | Out-Null
+        & (Join-Path $WindowsSource "uninstall.ps1") -ProjectPath $OtherProject | Out-Null
         Assert-True (-not (Test-Path -LiteralPath ([string]$stateB.runtime_root))) `
             "uninstall left project B runtime behind"
     }

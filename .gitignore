@@ -10,6 +10,7 @@ token-star-overlay.pid.json
 token-star-overlay.stop
 overlay-position.json
 overlay.enabled
+sessions/
 project-scope.json
 .preview-server.pid.json
 *.ghostty-supernova.tmp

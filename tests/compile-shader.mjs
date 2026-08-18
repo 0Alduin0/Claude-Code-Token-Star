@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const loadGlslang = require('@webgpu/glslang');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const body = fs.readFileSync(path.join(here, '..', 'supernova.glsl'), 'utf8');
+const body = fs.readFileSync(path.join(here, '..', 'src', 'ghostty', 'supernova.glsl'), 'utf8');
 const header = `#version 310 es
 precision highp float;
 precision highp int;

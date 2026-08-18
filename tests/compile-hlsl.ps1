@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Shader = Join-Path $Root "supernova-windows.hlsl"
+$Shader = Join-Path $Root "src\windows\supernova-windows.hlsl"
 $Output = Join-Path $env:TEMP "ghostty-supernova-windows-test.cso"
 
 $Compiler = Get-Command fxc.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1

@@ -18,6 +18,12 @@ param(
     [Parameter(ParameterSetName = "Off", Mandatory = $true)]
     [switch]$Off,
 
+    [Parameter(ParameterSetName = "On", Mandatory = $true)]
+    [switch]$On,
+
+    [Parameter(ParameterSetName = "Reset", Mandatory = $true)]
+    [switch]$Reset,
+
     [Parameter(ParameterSetName = "Sweep", Mandatory = $true)]
     [switch]$Sweep,
 
@@ -45,6 +51,7 @@ $OverlayEnabledPath = Join-Path $PSScriptRoot "overlay.enabled"
 $OverlayPidPath = Join-Path $PSScriptRoot "token-star-overlay.pid.json"
 $OverlayStopPath = Join-Path $PSScriptRoot "token-star-overlay.stop"
 $OverlayPositionPath = Join-Path $PSScriptRoot "overlay-position.json"
+$SessionStateRoot = Join-Path $PSScriptRoot "sessions"
 $ProjectScopePath = Join-Path $PSScriptRoot "project-scope.json"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $Invariant = [System.Globalization.CultureInfo]::InvariantCulture
@@ -124,6 +131,108 @@ function Get-InvocationProjectPath {
         if (-not [string]::IsNullOrWhiteSpace([string]$candidate)) { return [string]$candidate }
     }
     return (Get-Location).Path
+}
+
+function Get-SessionId {
+    param($Data)
+    $direct = Get-ObjectProperty $Data "session_id"
+    if (-not [string]::IsNullOrWhiteSpace([string]$direct)) { return [string]$direct }
+    $session = Get-ObjectProperty $Data "session"
+    $nested = Get-ObjectProperty $session "id"
+    if (-not [string]::IsNullOrWhiteSpace([string]$nested)) { return [string]$nested }
+    return ""
+}
+
+function Get-SessionStatePath {
+    param([string]$SessionId)
+    if ([string]::IsNullOrWhiteSpace($SessionId)) { return $null }
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $algorithm.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SessionId))
+    }
+    finally { $algorithm.Dispose() }
+    $name = (($bytes[0..15] | ForEach-Object { $_.ToString("x2") }) -join "") + ".json"
+    return Join-Path $SessionStateRoot $name
+}
+
+function Write-SessionState {
+    param($Data, $Stats)
+    $sessionId = Get-SessionId $Data
+    $path = Get-SessionStatePath $sessionId
+    if (-not $path) { return }
+    [System.IO.Directory]::CreateDirectory($SessionStateRoot) | Out-Null
+    $record = [ordered]@{
+        schema = 1
+        session_id = $sessionId
+        updated_utc = [DateTime]::UtcNow.ToString("o", $Invariant)
+        level = [double]$Stats.Level
+        tokens = [long]$Stats.Tokens
+        window_size = [long]$Stats.WindowSize
+        fresh_input = [long]$Stats.FreshInput
+        cache_creation = [long]$Stats.CacheCreation
+        cache_read = [long]$Stats.CacheRead
+        output_tokens = [long]$Stats.OutputTokens
+        five_hour_used = [double]$Stats.FiveHourUsed
+        five_hour_resets_at = [long]$Stats.FiveHourResetsAt
+        seven_day_used = [double]$Stats.SevenDayUsed
+        seven_day_resets_at = [long]$Stats.SevenDayResetsAt
+        model = [string]$Stats.Model
+        effort = [string]$Stats.Effort
+    }
+    $temporary = $path + "." + [guid]::NewGuid().ToString("N") + ".tmp"
+    try {
+        [System.IO.File]::WriteAllText($temporary, ($record | ConvertTo-Json -Compress) + "`n", $Utf8NoBom)
+        Move-Item -LiteralPath $temporary -Destination $path -Force
+    }
+    finally { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
+}
+
+function Remove-SessionState {
+    param($Data)
+    $path = Get-SessionStatePath (Get-SessionId $Data)
+    if ($path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+}
+
+function Get-HighestSessionStats {
+    if (-not (Test-Path -LiteralPath $SessionStateRoot -PathType Container)) { return $null }
+    $cutoff = [DateTime]::UtcNow.AddMinutes(-10)
+    $candidates = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $SessionStateRoot -Filter "*.json" -File -ErrorAction SilentlyContinue)) {
+        try {
+            $record = [System.IO.File]::ReadAllText($file.FullName) | ConvertFrom-Json
+            $updated = [DateTime]::Parse(
+                [string]$record.updated_utc,
+                $Invariant,
+                [Globalization.DateTimeStyles]::RoundtripKind
+            ).ToUniversalTime()
+            if ($updated -lt $cutoff) {
+                Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue
+                continue
+            }
+            $candidates += $record
+        }
+        catch { Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue }
+    }
+    if ($candidates.Count -eq 0) { return $null }
+    $selected = $candidates | Sort-Object @{ Expression = { [long]$_.tokens }; Descending = $true }, `
+        @{ Expression = { [double]$_.level }; Descending = $true }, `
+        @{ Expression = { [string]$_.updated_utc }; Descending = $true } | Select-Object -First 1
+    return [pscustomobject]@{
+        Level = [double]$selected.level
+        Tokens = [long]$selected.tokens
+        WindowSize = [long]$selected.window_size
+        FreshInput = [long]$selected.fresh_input
+        CacheCreation = [long]$selected.cache_creation
+        CacheRead = [long]$selected.cache_read
+        OutputTokens = [long]$selected.output_tokens
+        FiveHourUsed = [double]$selected.five_hour_used
+        FiveHourResetsAt = [long]$selected.five_hour_resets_at
+        SevenDayUsed = [double]$selected.seven_day_used
+        SevenDayResetsAt = [long]$selected.seven_day_resets_at
+        Model = [string]$selected.model
+        Effort = [string]$selected.effort
+        SessionCount = [int]$candidates.Count
+    }
 }
 
 function Get-ContextStats {
@@ -229,7 +338,7 @@ function Write-TokenState {
         }
     }
     $state = [ordered]@{
-        schema = 2
+        schema = 3
         level = $safeLevel
         tokens = [Math]::Max(0L, $UsedTokens)
         active = $Active
@@ -238,6 +347,10 @@ function Write-TokenState {
         project_name = if ($scope) { [string]$scope.name } else { "" }
         model = if ($Breakdown) { [string](Get-ObjectProperty $Breakdown "Model") } else { "" }
         effort = if ($Breakdown) { [string](Get-ObjectProperty $Breakdown "Effort") } else { "" }
+        active_sessions = if ($Breakdown) {
+            [Math]::Max(1, [int](Get-NumberValue (Get-ObjectProperty $Breakdown "SessionCount") 1.0))
+        }
+        elseif ($Active) { 1 } else { 0 }
         breakdown = $details
         rate_limits = $rateLimits
         updated_utc = [DateTime]::UtcNow.ToString("o", $Invariant)
@@ -306,6 +419,24 @@ function Start-OverlayIfNeeded {
     }
 }
 
+function Clear-SessionStates {
+    if (-not (Test-Path -LiteralPath $SessionStateRoot -PathType Container)) { return }
+    foreach ($file in @(Get-ChildItem -LiteralPath $SessionStateRoot -File -ErrorAction SilentlyContinue)) {
+        Remove-Item -LiteralPath $file.FullName -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item -LiteralPath $SessionStateRoot -Force -ErrorAction SilentlyContinue
+}
+
+function Stop-Overlay {
+    $process = Get-OverlayProcess
+    if (-not $process) { return }
+    [System.IO.File]::WriteAllText($OverlayStopPath, "stop`n", $Utf8NoBom)
+    foreach ($attempt in 1..20) {
+        if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 100
+    }
+}
+
 function Write-ShaderState {
     param([double]$ContextLevel, [long]$UsedTokens, [bool]$Active, $Breakdown = $null)
     if (-not (Test-Path -LiteralPath $TemplatePath)) {
@@ -370,9 +501,26 @@ if ($Doctor) {
     exit 0
 }
 
-if ($Off) {
+if ($Reset) {
+    Clear-SessionStates
     Write-ShaderState 0.0 0 $false
-    Write-Output "Ghostty Supernova is off for Windows Terminal."
+    exit 0
+}
+
+if ($Off) {
+    Remove-Item -LiteralPath $OverlayEnabledPath -Force -ErrorAction SilentlyContinue
+    Clear-SessionStates
+    Write-ShaderState 0.0 0 $false
+    Stop-Overlay
+    Write-Output "Claude Code Token Star is off. Run the on command to show it again."
+    exit 0
+}
+
+if ($On) {
+    [System.IO.File]::WriteAllText($OverlayEnabledPath, "enabled`n", $Utf8NoBom)
+    Remove-Item -LiteralPath $OverlayStopPath -Force -ErrorAction SilentlyContinue
+    Start-OverlayIfNeeded
+    Write-Output "Claude Code Token Star is on. It will appear on the next Claude status refresh."
     exit 0
 }
 
@@ -427,18 +575,28 @@ if (-not (Test-PathInProject (Get-InvocationProjectPath $data))) {
 
 $eventName = Get-ObjectProperty $data "hook_event_name"
 if ($eventName -eq "SessionEnd") {
-    Write-ShaderState 0.0 0 $false
+    Remove-SessionState $data
+    $remaining = Get-HighestSessionStats
+    if ($remaining) { Write-ShaderState ([double]$remaining.Level) ([long]$remaining.Tokens) $true $remaining }
+    else { Write-ShaderState 0.0 0 $false }
     exit 0
 }
 if ($eventName -eq "SessionStart") {
-    Write-ShaderState 0.0 0 $true (Get-ContextStats $data)
+    $started = Get-ContextStats $data
+    Write-SessionState $data $started
+    $selected = Get-HighestSessionStats
+    if (-not $selected) { $selected = $started }
+    Write-ShaderState ([double]$selected.Level) ([long]$selected.Tokens) $true $selected
     exit 0
 }
 
 $stats = Get-ContextStats $data
 $contextLevel = [double]$stats.Level
 $usedTokens = [long]$stats.Tokens
-Write-ShaderState $contextLevel $usedTokens $true $stats
+Write-SessionState $data $stats
+$selected = Get-HighestSessionStats
+if (-not $selected) { $selected = $stats }
+Write-ShaderState ([double]$selected.Level) ([long]$selected.Tokens) $true $selected
 $massUsage = Format-TokenCount $usedTokens
 if ([long]$stats.WindowSize -gt 0) {
     $massUsage += " / $(Format-TokenCount ([long]$stats.WindowSize))"

@@ -27,25 +27,26 @@ const packageJson = JSON.parse(
 );
 
 const runtimeFiles = [
-  "VERSION",
-  "claude-settings.example.json",
-  "claude-settings.windows.example.json",
-  "install.cmd",
-  "install.ps1",
-  "install.sh",
-  "preview.html",
-  "preview.ps1",
-  "supernova.glsl",
-  "supernova-windows.hlsl",
-  "token-mass.py",
-  "token-mass-windows.ps1",
-  "token-star-overlay.ps1",
-  "token-test.cmd",
-  "token-test.ps1",
-  "token-test.sh",
-  "uninstall.cmd",
-  "uninstall.ps1",
-  "uninstall.sh",
+  { source: "VERSION", destination: "VERSION" },
+  ...(process.platform === "win32"
+    ? [
+        { source: "src/windows/install.ps1", destination: "install.ps1" },
+        { source: "src/windows/uninstall.ps1", destination: "uninstall.ps1" },
+        { source: "src/windows/token-mass-windows.ps1", destination: "token-mass-windows.ps1" },
+        { source: "src/windows/token-star-overlay.ps1", destination: "token-star-overlay.ps1" },
+        { source: "src/windows/supernova-windows.hlsl", destination: "supernova-windows.hlsl" },
+        { source: "tools/token-test.ps1", destination: "token-test.ps1" },
+        { source: "tools/preview.ps1", destination: "preview.ps1" },
+        { source: "tools/preview.html", destination: "preview.html" },
+        { source: "src/ghostty/supernova.glsl", destination: "supernova.glsl" },
+      ]
+    : [
+        { source: "src/ghostty/install.sh", destination: "install.sh" },
+        { source: "src/ghostty/uninstall.sh", destination: "uninstall.sh" },
+        { source: "src/ghostty/token-mass.py", destination: "token-mass.py" },
+        { source: "src/ghostty/token-test.sh", destination: "token-test.sh" },
+        { source: "src/ghostty/supernova.glsl", destination: "supernova.glsl" },
+      ]),
 ];
 
 function fail(message) {
@@ -78,10 +79,10 @@ function stageRuntime() {
     fail(`${installRoot} exists but is not a Claude Code Token Star install.`);
   }
   mkdirSync(installRoot, { recursive: true });
-  for (const name of runtimeFiles) {
-    const source = join(packageRoot, name);
-    if (!existsSync(source)) fail(`package is missing ${name}`);
-    cpSync(source, join(installRoot, name), { force: true });
+  for (const file of runtimeFiles) {
+    const source = join(packageRoot, file.source);
+    if (!existsSync(source)) fail(`package is missing ${file.source}`);
+    cpSync(source, join(installRoot, file.destination), { force: true });
   }
 }
 
@@ -119,7 +120,8 @@ Usage:
   claude-token-star uninstall  Remove it from the current project
   claude-token-star doctor     Check the installation
   claude-token-star sweep      Preview every stellar stage
-  claude-token-star off        Hide/reset the star
+  claude-token-star on         Enable and start the Windows overlay
+  claude-token-star off        Stop and disable the Windows overlay
   claude-token-star --version  Print the package version
 
 Run the command from your project root. Windows supports the IDE overlay;
@@ -157,7 +159,7 @@ if (["-h", "--help", "help"].includes(command)) {
   }
   rmSync(installRoot, { recursive: true, force: true });
   console.log(`Removed ${installRoot}`);
-} else if (["doctor", "sweep", "off"].includes(command)) {
+} else if (["doctor", "sweep", "on", "off"].includes(command)) {
   if (process.platform === "win32") {
     runPowerShell(installedFile("token-test.ps1"), [
       command,
@@ -166,6 +168,9 @@ if (["-h", "--help", "help"].includes(command)) {
       ...forwardedArgs,
     ]);
   } else {
+    if (command === "on") {
+      fail("the on command is only needed for the Windows IDE overlay.");
+    }
     runPython([
       installedFile("token-mass.py"),
       `--${command}`,

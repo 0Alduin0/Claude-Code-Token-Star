@@ -70,14 +70,14 @@ release, the shorter command will be `npx claude-token-star`.
 
 ```powershell
 git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git .claude-token-star
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.claude-token-star\src\windows\install.ps1
 ```
 
 ### Linux and macOS
 
 ```sh
 git clone https://github.com/0Alduin0/Claude-Code-Token-Star.git .claude-token-star
-sh ./.claude-token-star/install.sh
+sh ./.claude-token-star/src/ghostty/install.sh
 ```
 
 </details>
@@ -85,9 +85,11 @@ sh ./.claude-token-star/install.sh
 ## Use it
 
 - Drag the star to move it near an IDE corner or edge.
+- The controls automatically flip to the open side of the star near window
+  edges, so the menu never covers the stellar visual.
 - `MASS 656K / 1.00M` shows used tokens beside the model's context capacity.
 - `5H 61% | 2h 23m` shows five-hour usage and the time until reset.
-- The compact bar shows the active Claude model and effort level.
+- The compact bar shows the active Claude model and a readable effort label.
 - Click the arrow for model, effort, input, cache-read, remaining-context,
   five-hour, reset, and seven-day details.
 - Choose **Auto** to evolve through every stellar stage, or pin one stage such
@@ -96,6 +98,9 @@ sh ./.claude-token-star/install.sh
   65% to 100% as the context fills.
 - Choose `1x`, `2x`, or `3x` to resize the star.
 - Enable **Lock position** to prevent accidental dragging.
+- If several Claude tabs are open in the project, the overlay shows the active
+  session with the highest context-token usage. The details card also shows
+  the number of active sessions.
 - The Windows overlay hides when you switch away from its installed project.
 
 <img src="assets/overlay-token-details.png" width="500" alt="Token details and star size menu">
@@ -111,6 +116,20 @@ On Linux or macOS:
 ```sh
 ./.claude-token-star/token-test.sh sweep
 ```
+
+### Turn the Windows overlay off or on
+
+The setting persists across Claude sessions. Run either command from the
+project where Token Star is installed:
+
+```powershell
+npx --yes github:0Alduin0/Claude-Code-Token-Star off
+npx --yes github:0Alduin0/Claude-Code-Token-Star on
+```
+
+`off` closes the current overlay process and prevents status refreshes from
+starting it again. `on` re-enables it; the star appears on the next Claude
+status refresh.
 
 ## Browser preview
 
@@ -131,11 +150,32 @@ stop it.
 
 The Windows overlay appears only while the installed project is open in a
 supported IDE. Seeing `--` before Claude Code sends its first status update is
-normal.
+normal. An enabled overlay process is restarted automatically by the next
+status refresh if it exits unexpectedly.
 
 For installation problems, include your OS, terminal/editor, Claude Code
 version, and doctor output in a GitHub issue. Do not include tokens, settings,
 or conversation contents.
+
+## Resource use
+
+The bridge reads data Claude Code already sends to the status line. It makes no
+extra API requests and consumes no additional model tokens. The overlay uses a
+single low-frequency WPF animation timer; hidden overlays refresh once per
+second.
+
+On the 16-logical-core Windows test machine, a 10-second warmed-up Quasar run
+averaged **65.5 MB resident RAM** and **0.09% total CPU**. WPF initialization
+briefly reached **260.9 MB resident RAM**; private committed memory averaged
+234.4 MB. Results vary by Windows, DPI, GPU driver, and selected stellar stage.
+
+## Repository layout
+
+- `src/windows/` contains the Windows installer, bridge, WPF overlay, and HLSL.
+- `src/ghostty/` contains the macOS/Linux bridge, scripts, and GLSL.
+- `tools/` contains preview and visual-test utilities.
+- `scripts/windows/` contains optional `.cmd` wrappers.
+- `tests/` and `assets/` contain automated checks and documentation media.
 
 ## Contributing
 

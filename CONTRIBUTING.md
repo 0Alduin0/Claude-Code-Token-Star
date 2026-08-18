@@ -31,13 +31,13 @@ npm run test:hlsl
 Exercise all six stages without spending tokens:
 
 ```powershell
-.\token-test.ps1 sweep
+.\tools\token-test.ps1 sweep
 ```
 
 For Ghostty:
 
 ```sh
-./token-test.sh sweep
+./src/ghostty/token-test.sh sweep
 ```
 
 If a visual changes, include a before/after screenshot or short recording in

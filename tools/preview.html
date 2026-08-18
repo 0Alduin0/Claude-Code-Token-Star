@@ -102,7 +102,12 @@ Resets in          2h 23m
       in vec2 position;
       void main() { gl_Position = vec4(position, 0.0, 1.0); }
     `;
-    const shaderBody = await fetch('./supernova.glsl', {cache: 'no-store'}).then(r => r.text());
+    let shaderResponse = await fetch('./supernova.glsl', {cache: 'no-store'});
+    if (!shaderResponse.ok) {
+      shaderResponse = await fetch('../src/ghostty/supernova.glsl', {cache: 'no-store'});
+    }
+    if (!shaderResponse.ok) throw new Error('supernova.glsl was not found');
+    const shaderBody = await shaderResponse.text();
     const fragment = `#version 300 es
       precision highp float;
       precision highp int;

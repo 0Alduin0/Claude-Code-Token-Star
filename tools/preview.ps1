@@ -11,7 +11,11 @@ if (-not $python) {
     throw "Local preview requires Python 3. Install Python, then run this command again."
 }
 
-$url = "http://127.0.0.1:$Port/preview.html"
+$sourceShader = Join-Path (Split-Path -Parent $PSScriptRoot) "src\ghostty\supernova.glsl"
+$sourceLayout = Test-Path -LiteralPath $sourceShader
+$serverRoot = if ($sourceLayout) { Split-Path -Parent $PSScriptRoot } else { $PSScriptRoot }
+$previewRoute = if ($sourceLayout) { "tools/preview.html" } else { "preview.html" }
+$url = "http://127.0.0.1:$Port/$previewRoute"
 $pidPath = Join-Path $PSScriptRoot ".preview-server.pid.json"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 try {
@@ -29,7 +33,7 @@ $arguments = if ($python.Name -eq "py.exe") {
 else { @("-m", "http.server", $Port, "--bind", "127.0.0.1") }
 
 $server = Start-Process -FilePath $python.Source -ArgumentList $arguments `
-    -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -PassThru
+    -WorkingDirectory $serverRoot -WindowStyle Hidden -PassThru
 $ownedServer = $null
 try {
     foreach ($attempt in 1..30) {

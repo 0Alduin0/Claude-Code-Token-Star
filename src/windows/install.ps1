@@ -339,7 +339,7 @@ if ($legacyCommand -and (Test-Path -LiteralPath $legacyStatePath)) {
 $oldOverride = $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS
 try {
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
-    & $bridge -Off | Out-Null
+    & $bridge -Reset | Out-Null
     & $bridge -Doctor -SkipTerminalCheck:($SkipVersionCheck -or -not $TerminalSettings)
     if ($LASTEXITCODE -ne 0) { throw "Windows bridge doctor failed." }
 }

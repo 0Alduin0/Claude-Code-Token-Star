@@ -13,6 +13,8 @@ const help = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
 assert.equal(help.status, 0, help.stderr);
 assert.match(help.stdout, /Install or update the current project/);
 assert.match(help.stdout, /Linux and macOS currently require Ghostty/);
+assert.match(help.stdout, /on\s+Enable and start the Windows overlay/);
+assert.match(help.stdout, /off\s+Stop and disable the Windows overlay/);
 
 const version = spawnSync(process.execPath, [cli, "--version"], {
   encoding: "utf8",
