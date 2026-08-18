@@ -85,8 +85,10 @@ sh ./.claude-token-star/src/ghostty/install.sh
 ## Use it
 
 - Drag the star to move it near an IDE corner or edge.
-- The controls automatically flip to the open side of the star near window
-  edges, so the menu never covers the stellar visual.
+- The compact bar and details card stay centered directly below the star and
+  keep a stage-aware safety gap, so controls never cover the stellar visual.
+- Custom dragging lets the star center reach IDE corners without the invisible
+  overlay window forcing it back toward the middle.
 - `MASS 656K / 1.00M` shows used tokens beside the model's context capacity.
 - `5H 61% | 2h 23m` shows five-hour usage and the time until reset.
 - The compact bar shows the active Claude model and a readable effort label.
@@ -161,13 +163,16 @@ or conversation contents.
 
 The bridge reads data Claude Code already sends to the status line. It makes no
 extra API requests and consumes no additional model tokens. The overlay uses a
-single low-frequency WPF animation timer; hidden overlays refresh once per
-second.
+single low-frequency WPF animation timer; hidden overlays refresh roughly once
+every 1.5 seconds. Only the active stellar stage stays in the render tree, and
+the transparent window shrinks vertically to the visible content.
 
-On the 16-logical-core Windows test machine, a 10-second warmed-up Quasar run
-averaged **65.5 MB resident RAM** and **0.09% total CPU**. WPF initialization
-briefly reached **260.9 MB resident RAM**; private committed memory averaged
-234.4 MB. Results vary by Windows, DPI, GPU driver, and selected stellar stage.
+On the 16-logical-core Windows test machine, two consecutive 10-second
+warmed-up Quasar runs averaged **73.8 MB resident RAM** and **0.61% total CPU**.
+WPF initialization briefly reached **327.9 MB resident RAM**; private committed
+memory averaged 302.7 MB. The larger Hypergiant stage measured **95.0 MB** and
+**0.65% total CPU**. The warmed-up resident figure is the useful physical-RAM
+comparison; results vary by Windows, DPI, GPU driver, and selected stage.
 
 ## Repository layout
 

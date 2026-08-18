@@ -13,6 +13,7 @@ overlay.enabled
 sessions/
 project-scope.json
 .preview-server.pid.json
+.tmp-ui/
 *.ghostty-supernova.tmp
 *.mp4
 *.mov

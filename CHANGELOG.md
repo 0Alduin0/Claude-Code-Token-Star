@@ -4,9 +4,12 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-- Reworked the Windows control layout so the compact bar and details card flip
-  to the free side of the star and remain separate at window edges, every star
-  scale, and token-driven growth levels.
+- Reworked the Windows control layout so the compact bar and details card stay
+  centered directly below the star with stage-aware spacing at every star
+  scale and token-driven growth level.
+- Replaced native whole-window dragging with star-centered dragging, allowing
+  the star to reach IDE corners even though the transparent control canvas is
+  larger than the visible stellar graphic.
 - Replaced corrupted/special model separators and all-uppercase effort text
   with readable Segoe UI labels such as `Opus 5 / Extra high`.
 - Added per-session state tracking so multiple Claude tabs display the active
@@ -15,6 +18,9 @@ All notable changes to this project are documented here.
   and disabling the Windows overlay.
 - Reduced animation object counts, removed dynamic blur effects, consolidated
   timers, slowed hidden refreshes, and trimmed the warmed-up working set.
+- Collapsed inactive stellar stages out of the WPF render tree, resized the
+  transparent surface to its visible content, cached stage resources, reduced
+  per-frame allocations, and skipped inactive-stage animation calculations.
 - Organized platform sources under `src/`, developer utilities under `tools/`,
   and Windows command wrappers under `scripts/windows/`.
 - Added persistent automatic/fixed stellar-stage selection, including the
