@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Restored the smoother visible-overlay animation cadence while retaining the
+  active-stage render-tree, caching, allocation, and hidden-refresh savings.
 - Reworked the Windows control layout so the compact bar and details card stay
   centered directly below the star with stage-aware spacing at every star
   scale and token-driven growth level.

@@ -677,6 +677,8 @@ $OverlayVisible = $false
 $LastRenderedStage = ""
 $LastDragSize = -1.0
 $WorkingSetTrimmed = $false
+$VisibleAnimationIntervalMs = 150.0
+$HiddenAnimationIntervalMs = 1500.0
 $AllowedIdeProcesses = @("pycharm64", "pycharm", "idea64", "idea", "webstorm64", "webstorm", "rider64", "rider", "clion64", "clion", "goland64", "goland", "phpstorm64", "phpstorm", "rubymine64", "rubymine", "datagrip64", "datagrip", "studio64", "studio", "code", "cursor", "devenv", "eclipse")
 $StageColors = @{
     "RED DWARF" = @("#FFFF7A32", "#FF6D0702", "#001D0000")
@@ -1257,7 +1259,9 @@ function Update-Visual {
         $MassPanel.IsHitTestVisible = $visible -or $SelfTest
         $DetailsPanel.IsHitTestVisible = ($visible -or $SelfTest) -and $script:DetailsOpen
         if ($script:Timer) {
-            $targetInterval = if (-not $visible) { 1500 } elseif ($stage -in @("RED DWARF", "MAIN SEQUENCE", "BLUE GIANT", "HYPERGIANT")) { 400 } else { 300 }
+            # Keep every visible stage on the same smooth cadence. Expensive state,
+            # visibility, layout, and corona work remains independently throttled.
+            $targetInterval = if ($visible) { $script:VisibleAnimationIntervalMs } else { $script:HiddenAnimationIntervalMs }
             if ($script:Timer.Interval.TotalMilliseconds -ne $targetInterval) {
                 $script:Timer.Interval = [TimeSpan]::FromMilliseconds($targetInterval)
             }
@@ -1614,6 +1618,12 @@ $Window.Add_SourceInitialized({
 Read-TokenState
 Update-Visual
 if ($SelfTest) {
+    if ($VisibleAnimationIntervalMs -gt 150.0) {
+        throw "Token Star overlay visible animation cadence regression."
+    }
+    if ($HiddenAnimationIntervalMs -lt 1000.0) {
+        throw "Token Star overlay hidden refresh cadence regression."
+    }
     if ((Format-Mass 999999) -ne "1000K" -or (Format-Mass 1000000) -ne "1.00M" -or
         (Format-Mass 1250000) -ne "1.25M") {
         throw "Token Star overlay mass-format self-test failed."
@@ -1761,7 +1771,7 @@ if ($SelfTest) {
 [GC]::Collect()
 
 $Timer = New-Object Windows.Threading.DispatcherTimer
-$Timer.Interval = [TimeSpan]::FromMilliseconds(300)
+$Timer.Interval = [TimeSpan]::FromMilliseconds($VisibleAnimationIntervalMs)
 $Timer.Add_Tick({ Update-Visual; Update-HitTestMode })
 $Timer.Start()
 try { [void]$Window.ShowDialog() }
