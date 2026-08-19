@@ -7,6 +7,8 @@ All notable changes to this project are documented here.
 - Replaced the hand-drawn browser approximation with transparent animation
   assets rendered directly by WPF, keeping all six preview stages visually
   identical to the Windows overlay.
+- Mounted WPF preview assets as live image layers so animated WebP frames keep
+  advancing instead of freezing on the first Canvas frame.
 - Restored the smoother visible-overlay animation cadence while retaining the
   active-stage render-tree, caching, allocation, and hidden-refresh savings.
 - Reworked the Windows control layout so the compact bar and details card stay

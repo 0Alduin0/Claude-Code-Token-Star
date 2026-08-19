@@ -18,7 +18,9 @@
     .usage-details { position: absolute; z-index: 3; right: 0; top: 38px; min-width: 260px; padding: 10px 12px; border: 1px solid #456b91; border-radius: 7px; background: #050a11f5; color: #dceeff; text-align: left; line-height: 1.55; box-shadow: 0 16px 40px #000c; white-space: pre; }
     .usage-details[hidden] { display: none; }
     .ok { color: #75d79c; }
-    canvas { width: 100%; aspect-ratio: 16/9; background: #070b12; border: 1px solid #1d2a3a; border-radius: 12px; display: block; box-shadow: 0 24px 80px #000a; cursor: grab; touch-action: none; }
+    .preview-surface { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden; border: 1px solid #1d2a3a; border-radius: 12px; background: #070b12; box-shadow: 0 24px 80px #000a; }
+    canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    .star-frame { position: absolute; z-index: 1; height: auto; max-width: none; pointer-events: none; user-select: none; }
     canvas.dragging { cursor: grabbing; }
     .controls { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; margin-top: 14px; }
     input { width: 100%; accent-color: #7db7ff; }
@@ -55,7 +57,9 @@ Resets in          2h 23m
         <div><span id="stage">82% · NEUTRON STAR</span> · <span id="renderer">STARTING...</span></div>
       </div>
     </header>
-    <canvas id="view" width="1280" height="720"></canvas>
+    <div class="preview-surface" id="preview-surface">
+      <canvas id="view" width="1280" height="720"></canvas>
+    </div>
     <div class="controls">
       <input id="level" aria-label="Token fill" type="range" min="0" max="100" value="82">
       <button id="tour" type="button">Auto tour</button>

@@ -8,11 +8,14 @@ const fileVersion = readFileSync("VERSION", "utf8").trim();
 const cli = "bin/claude-token-star.mjs";
 const cliSource = readFileSync(cli, "utf8");
 const previewHtml = readFileSync("tools/preview.html", "utf8");
+const previewRenderer = readFileSync("tools/preview-renderer.js", "utf8");
 
 assert.equal(packageJson.version, fileVersion, "VERSION must match package.json");
 assert.ok(packageJson.files.includes("tools/preview-renderer.js"), "preview renderer missing from package");
 assert.match(cliSource, /preview-renderer\.js/, "preview renderer missing from staged runtime");
 assert.match(previewHtml, /src="\.\/preview-renderer\.js"/, "browser preview does not load the current renderer");
+assert.match(previewHtml, /id="preview-surface"/, "browser preview animation surface is missing");
+assert.match(previewRenderer, /surface\.append\(stage\.image\)/, "WPF animations are not mounted as live image layers");
 for (const slug of ["red-dwarf", "main-sequence", "blue-giant", "hypergiant", "neutron-star", "quasar"]) {
   const assetPath = `assets/preview/overlay-${slug}.webp`;
   assert.ok(existsSync(assetPath), `WPF preview asset missing for ${slug}`);

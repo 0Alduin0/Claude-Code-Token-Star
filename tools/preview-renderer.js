@@ -5,6 +5,7 @@ const stageOut = document.querySelector("#stage");
 const massOut = document.querySelector("#mass");
 const rendererOut = document.querySelector("#renderer");
 const errorOut = document.querySelector("#error");
+const surface = document.querySelector("#preview-surface");
 
 if (!ctx) {
   const message = "Canvas 2D is required.";
@@ -69,6 +70,11 @@ async function loadStageAsset(stage) {
   for (const url of candidates) {
     try {
       stage.image = await loadImage(url);
+      stage.image.className = "star-frame";
+      stage.image.alt = "";
+      stage.image.draggable = false;
+      stage.image.style.display = "none";
+      surface.append(stage.image);
       return;
     } catch (error) {
       lastError = error;
@@ -136,7 +142,7 @@ function drawMassPanel(x, y, tokens) {
   ctx.restore();
 }
 
-function drawOverlay(level) {
+function getOverlayGeometry(level) {
   const stage = stageFor(level);
   const position = manualPosition ?? { x: canvas.width * 0.70, y: canvas.height * 0.36 };
   const x = Math.max(0, Math.min(canvas.width, position.x));
@@ -144,19 +150,23 @@ function drawOverlay(level) {
   const displayScale = 0.65 + 0.35 * level;
   const anchorScale = 0.65 + 0.35 * stage.anchor;
   const relativeScale = displayScale / anchorScale;
+  return { stage, x, y, displayScale, relativeScale };
+}
 
+function drawOverlay(level) {
+  const geometry = getOverlayGeometry(level);
+  const { stage, x, y, displayScale, relativeScale } = geometry;
+  for (const candidate of stages) {
+    if (!candidate.image) continue;
+    candidate.image.style.display = candidate === stage ? "block" : "none";
+  }
   if (stage.image) {
-    const width = 700 * relativeScale;
-    const height = 700 * relativeScale;
-    ctx.drawImage(
-      stage.image,
-      x - 350 * relativeScale,
-      y - 260 * relativeScale,
-      width,
-      height,
-    );
+    stage.image.style.left = `${(x - 350 * relativeScale) / canvas.width * 100}%`;
+    stage.image.style.top = `${(y - 260 * relativeScale) / canvas.height * 100}%`;
+    stage.image.style.width = `${700 * relativeScale / canvas.width * 100}%`;
   }
   drawMassPanel(x, y + stage.clearance * displayScale + 12, level * 200000);
+  return geometry;
 }
 
 const requestedLevel = Number(new URLSearchParams(location.search).get("level"));
@@ -194,7 +204,22 @@ document.querySelector("#tour").addEventListener("click", (event) => {
 
 document.querySelector("#capture").addEventListener("click", () => {
   const level = Number(slider.value);
-  canvas.toBlob((blob) => {
+  const geometry = getOverlayGeometry(level);
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = canvas.width;
+  exportCanvas.height = canvas.height;
+  const exportContext = exportCanvas.getContext("2d");
+  exportContext.drawImage(canvas, 0, 0);
+  if (geometry.stage.image) {
+    exportContext.drawImage(
+      geometry.stage.image,
+      geometry.x - 350 * geometry.relativeScale,
+      geometry.y - 260 * geometry.relativeScale,
+      700 * geometry.relativeScale,
+      700 * geometry.relativeScale,
+    );
+  }
+  exportCanvas.toBlob((blob) => {
     if (!blob) return;
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
