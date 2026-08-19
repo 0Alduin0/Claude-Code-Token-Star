@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { findPython } from "../bin/python-runtime.mjs";
 
@@ -13,6 +13,15 @@ assert.equal(packageJson.version, fileVersion, "VERSION must match package.json"
 assert.ok(packageJson.files.includes("tools/preview-renderer.js"), "preview renderer missing from package");
 assert.match(cliSource, /preview-renderer\.js/, "preview renderer missing from staged runtime");
 assert.match(previewHtml, /src="\.\/preview-renderer\.js"/, "browser preview does not load the current renderer");
+for (const slug of ["red-dwarf", "main-sequence", "blue-giant", "hypergiant", "neutron-star", "quasar"]) {
+  const assetPath = `assets/preview/overlay-${slug}.webp`;
+  assert.ok(existsSync(assetPath), `WPF preview asset missing for ${slug}`);
+  const asset = readFileSync(assetPath);
+  assert.equal(asset.subarray(0, 4).toString("ascii"), "RIFF", `invalid WebP container for ${slug}`);
+  assert.ok(asset.includes(Buffer.from("ANIM")), `WPF preview asset is not animated for ${slug}`);
+  assert.equal(asset.toString("latin1").match(/ANMF/g)?.length, 16, `WPF preview frame count changed for ${slug}`);
+  assert.match(cliSource, new RegExp(`preview-${slug}\\.webp`), `WPF preview asset is not staged for ${slug}`);
+}
 
 const help = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
 assert.equal(help.status, 0, help.stderr);

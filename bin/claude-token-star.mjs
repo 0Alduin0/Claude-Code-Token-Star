@@ -39,6 +39,12 @@ const runtimeFiles = [
         { source: "tools/preview.ps1", destination: "preview.ps1" },
         { source: "tools/preview.html", destination: "preview.html" },
         { source: "tools/preview-renderer.js", destination: "preview-renderer.js" },
+        { source: "assets/preview/overlay-red-dwarf.webp", destination: "preview-red-dwarf.webp" },
+        { source: "assets/preview/overlay-main-sequence.webp", destination: "preview-main-sequence.webp" },
+        { source: "assets/preview/overlay-blue-giant.webp", destination: "preview-blue-giant.webp" },
+        { source: "assets/preview/overlay-hypergiant.webp", destination: "preview-hypergiant.webp" },
+        { source: "assets/preview/overlay-neutron-star.webp", destination: "preview-neutron-star.webp" },
+        { source: "assets/preview/overlay-quasar.webp", destination: "preview-quasar.webp" },
         { source: "src/ghostty/supernova.glsl", destination: "supernova.glsl" },
       ]
     : [

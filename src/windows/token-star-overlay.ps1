@@ -5,6 +5,10 @@ param(
     [string]$PidPath,
     [string]$StopPath,
     [string]$CapturePath,
+    [int]$CaptureFrames = 1,
+    [int]$CaptureFrameIntervalMs = 150,
+    [switch]$CaptureTransparent,
+    [switch]$CaptureVisualOnly,
     [switch]$CaptureDetails,
     [switch]$SelfTest,
     [switch]$Demo,
@@ -677,6 +681,7 @@ $OverlayVisible = $false
 $LastRenderedStage = ""
 $LastDragSize = -1.0
 $WorkingSetTrimmed = $false
+$AnimationTimeOverride = -1.0
 $VisibleAnimationIntervalMs = 150.0
 $HiddenAnimationIntervalMs = 1500.0
 $AllowedIdeProcesses = @("pycharm64", "pycharm", "idea64", "idea", "webstorm64", "webstorm", "rider64", "rider", "clion64", "clion", "goland64", "goland", "phpstorm64", "phpstorm", "rubymine64", "rubymine", "datagrip64", "datagrip", "studio64", "studio", "code", "cursor", "devenv", "eclipse")
@@ -1224,7 +1229,10 @@ Set-PositionLock $PositionLocked $false
 
 $Stopwatch = [Diagnostics.Stopwatch]::StartNew()
 function Update-Visual {
-    $time = $Stopwatch.Elapsed.TotalSeconds
+    $time = if ($script:AnimationTimeOverride -ge 0.0) {
+        [double]$script:AnimationTimeOverride
+    }
+    else { $Stopwatch.Elapsed.TotalSeconds }
     if (-not $SelfTest -and $time -ge $script:NextControlPoll) {
         $script:NextControlPoll = $time + 1.0
         if (Test-Path -LiteralPath $StopPath) {
@@ -1739,26 +1747,56 @@ if ($SelfTest) {
         $DetailsButton.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Button]::ClickEvent)))
     }
     if (-not [string]::IsNullOrWhiteSpace($CapturePath)) {
-        Start-Sleep -Milliseconds 420
-        Update-Visual
         $captureFullPath = [IO.Path]::GetFullPath($CapturePath)
         [IO.Directory]::CreateDirectory((Split-Path -Parent $captureFullPath)) | Out-Null
         $captureBackground = $Root.Background
+        $captureMassVisibility = $MassPanel.Visibility
+        $captureDetailsVisibility = $DetailsPanel.Visibility
+        $captureWidth = [int]$CanvasWidth
+        $captureHeight = if ($CaptureVisualOnly) { 700 } else { [int]$CanvasHeight }
         try {
-            $Root.Background = Get-SolidBrush "#FF070B12"
-            $Root.Measure((New-Object Windows.Size($CanvasWidth, $CanvasHeight)))
-            $Root.Arrange((New-Object Windows.Rect(0, 0, $CanvasWidth, $CanvasHeight)))
-            $Root.UpdateLayout()
-            $bitmap = New-Object Windows.Media.Imaging.RenderTargetBitmap([int]$CanvasWidth, [int]$CanvasHeight, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
-            $bitmap.Render($Root)
-            $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder
-            $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
-            $stream = [IO.File]::Open($captureFullPath, [IO.FileMode]::Create)
-            try { $encoder.Save($stream) }
-            finally { $stream.Dispose() }
+            if ($CaptureTransparent) { $Root.Background = [Windows.Media.Brushes]::Transparent }
+            else { $Root.Background = Get-SolidBrush "#FF070B12" }
+            if ($CaptureVisualOnly) {
+                $MassPanel.Visibility = [Windows.Visibility]::Collapsed
+                $DetailsPanel.Visibility = [Windows.Visibility]::Collapsed
+                Set-GrowWithTokens $true $false
+            }
+            $frameCount = [Math]::Max(1, $CaptureFrames)
+            $frameInterval = [Math]::Max(1, $CaptureFrameIntervalMs)
+            for ($frameIndex = 0; $frameIndex -lt $frameCount; $frameIndex++) {
+                if ($frameCount -gt 1) {
+                    $script:AnimationTimeOverride = $frameIndex * $frameInterval / 1000.0
+                }
+                else { Start-Sleep -Milliseconds 420 }
+                Update-Visual
+                $Root.Measure([Windows.Size]::new($captureWidth, $captureHeight))
+                $Root.Arrange([Windows.Rect]::new(0, 0, $captureWidth, $captureHeight))
+                $Root.UpdateLayout()
+                $bitmap = [Windows.Media.Imaging.RenderTargetBitmap]::new(
+                    $captureWidth, $captureHeight, 96, 96, [Windows.Media.PixelFormats]::Pbgra32
+                )
+                $bitmap.Render($Root)
+                $encoder = [Windows.Media.Imaging.PngBitmapEncoder]::new()
+                $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
+                $framePath = if ($frameCount -gt 1) {
+                    $directory = Split-Path -Parent $captureFullPath
+                    $baseName = [IO.Path]::GetFileNameWithoutExtension($captureFullPath)
+                    Join-Path $directory ("{0}-{1:D3}.png" -f $baseName, $frameIndex)
+                }
+                else { $captureFullPath }
+                $stream = [IO.File]::Open($framePath, [IO.FileMode]::Create)
+                try { $encoder.Save($stream) }
+                finally { $stream.Dispose() }
+                Write-Output "Captured $framePath"
+            }
         }
-        finally { $Root.Background = $captureBackground }
-        Write-Output "Captured $captureFullPath"
+        finally {
+            $script:AnimationTimeOverride = -1.0
+            $Root.Background = $captureBackground
+            $MassPanel.Visibility = $captureMassVisibility
+            $DetailsPanel.Visibility = $captureDetailsVisibility
+        }
     }
     Write-Output "Token Star overlay self-test OK"
     if ($CreatedNew) { $OverlayMutex.ReleaseMutex() }

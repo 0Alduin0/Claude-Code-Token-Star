@@ -143,7 +143,7 @@ On Windows:
 
 This opens <http://127.0.0.1:4173/preview.html>. Press Enter in the terminal to
 stop it. The preview mirrors the current Windows overlay geometry and animation
-for all six stellar stages.
+for all six stellar stages using animation assets rendered directly by WPF.
 
 ## Troubleshooting
 
