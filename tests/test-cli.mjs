@@ -6,8 +6,13 @@ import { findPython } from "../bin/python-runtime.mjs";
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const fileVersion = readFileSync("VERSION", "utf8").trim();
 const cli = "bin/claude-token-star.mjs";
+const cliSource = readFileSync(cli, "utf8");
+const previewHtml = readFileSync("tools/preview.html", "utf8");
 
 assert.equal(packageJson.version, fileVersion, "VERSION must match package.json");
+assert.ok(packageJson.files.includes("tools/preview-renderer.js"), "preview renderer missing from package");
+assert.match(cliSource, /preview-renderer\.js/, "preview renderer missing from staged runtime");
+assert.match(previewHtml, /src="\.\/preview-renderer\.js"/, "browser preview does not load the current renderer");
 
 const help = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8" });
 assert.equal(help.status, 0, help.stderr);

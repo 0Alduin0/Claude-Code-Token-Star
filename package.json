@@ -26,6 +26,7 @@
     "src/windows/token-star-overlay.ps1",
     "src/windows/uninstall.ps1",
     "tools/preview.html",
+    "tools/preview-renderer.js",
     "tools/preview.ps1",
     "tools/token-test.ps1",
     "LICENSE",

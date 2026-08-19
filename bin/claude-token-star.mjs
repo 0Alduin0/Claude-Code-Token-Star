@@ -38,6 +38,7 @@ const runtimeFiles = [
         { source: "tools/token-test.ps1", destination: "token-test.ps1" },
         { source: "tools/preview.ps1", destination: "preview.ps1" },
         { source: "tools/preview.html", destination: "preview.html" },
+        { source: "tools/preview-renderer.js", destination: "preview-renderer.js" },
         { source: "src/ghostty/supernova.glsl", destination: "supernova.glsl" },
       ]
     : [

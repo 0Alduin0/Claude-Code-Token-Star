@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Ghostty Supernova Preview</title>
+  <title>Claude Token Star Preview</title>
   <style>
     :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
     * { box-sizing: border-box; }
@@ -34,12 +34,12 @@
   <main>
     <header>
       <div>
-        <h1>Ghostty Supernova</h1>
-        <p>Choose a stage, then drag the object anywhere on the canvas.</p>
+        <h1>Claude Token Star</h1>
+        <p>Current Windows overlay visuals — choose a stage or drag the star.</p>
       </div>
       <div class="readout">
         <button class="usage-toggle" id="usage-toggle" type="button" aria-expanded="false">
-          <span id="mass">MASS 164K</span> | 5H %61 | 2h 23m <span id="usage-arrow">&#x25BC;</span>
+          <span id="mass">MASS 164K / 200K</span> | 5H 61% | 2h 23m <span id="usage-arrow">&#x25BC;</span>
         </button>
         <div class="usage-details" id="usage-details" hidden>CONTEXT 82%
 Total input       164,000
@@ -49,250 +49,22 @@ Cache read         71,000
 Last output         3,210
 Remaining          36,000
 
-5-hour limit          %61
+5-hour limit          61%
 Resets in          2h 23m
-7-day limit           %28</div>
-        <div><span id="stage">NEUTRON STAR</span> · <span id="compile">COMPILING...</span></div>
+7-day limit           28%</div>
+        <div><span id="stage">82% · NEUTRON STAR</span> · <span id="renderer">STARTING...</span></div>
       </div>
     </header>
     <canvas id="view" width="1280" height="720"></canvas>
     <div class="controls">
       <input id="level" aria-label="Token fill" type="range" min="0" max="100" value="82">
-      <button id="tour">Auto tour</button>
-      <button id="capture">Save PNG</button>
-      <button id="reset-position">Auto position</button>
+      <button id="tour" type="button">Auto tour</button>
+      <button id="capture" type="button">Save PNG</button>
+      <button id="reset-position" type="button">Auto position</button>
     </div>
     <div class="stages" id="stages" aria-label="Stage checkpoints"></div>
     <pre id="error"></pre>
   </main>
-  <script type="module">
-    const canvas = document.querySelector('#view');
-    const slider = document.querySelector('#level');
-    const stageOut = document.querySelector('#stage');
-    const massOut = document.querySelector('#mass');
-    const compileOut = document.querySelector('#compile');
-    const errorOut = document.querySelector('#error');
-    const gl = canvas.getContext('webgl2', {antialias: false, alpha: false});
-    if (!gl) throw new Error('WebGL 2 is required.');
-
-    const usageToggle = document.querySelector('#usage-toggle');
-    const usageDetails = document.querySelector('#usage-details');
-    const usageArrow = document.querySelector('#usage-arrow');
-    usageToggle.addEventListener('click', () => {
-      const open = usageToggle.getAttribute('aria-expanded') !== 'true';
-      usageToggle.setAttribute('aria-expanded', String(open));
-      usageDetails.hidden = !open;
-      usageArrow.textContent = open ? '\u25B2' : '\u25BC';
-    });
-
-    const stages = [
-      [.15, 'RED DWARF'], [.35, 'MAIN SEQUENCE'], [.55, 'BLUE GIANT'],
-      [.75, 'HYPERGIANT'], [.90, 'NEUTRON STAR'], [1.01, 'QUASAR']
-    ];
-    const checkpoints = [
-      [7, 'Red dwarf'], [25, 'Main sequence'], [45, 'Blue giant'],
-      [65, 'Hypergiant'], [82, 'Neutron star'], [95, 'Quasar']
-    ];
-    const stageName = value => stages.find(([limit]) => value < limit)[1];
-
-    const requestedLevel = Number(new URLSearchParams(location.search).get('level'));
-    if (Number.isFinite(requestedLevel)) slider.value = String(Math.max(0, Math.min(100, requestedLevel)));
-
-    const vertex = `#version 300 es
-      in vec2 position;
-      void main() { gl_Position = vec4(position, 0.0, 1.0); }
-    `;
-    let shaderResponse = await fetch('./supernova.glsl', {cache: 'no-store'});
-    if (!shaderResponse.ok) {
-      shaderResponse = await fetch('../src/ghostty/supernova.glsl', {cache: 'no-store'});
-    }
-    if (!shaderResponse.ok) throw new Error('supernova.glsl was not found');
-    const shaderBody = await shaderResponse.text();
-    const fragment = `#version 300 es
-      precision highp float;
-      precision highp int;
-      uniform vec3 iResolution;
-      uniform float iTime;
-      uniform float iTimeCursorChange;
-      uniform vec4 iCurrentCursorColor;
-      uniform vec4 iPreviousCursorColor;
-      uniform vec4 iMouse;
-      uniform sampler2D iChannel0;
-      out vec4 outColor;
-      ${shaderBody}
-      void main() {
-        mainImage(outColor, vec2(gl_FragCoord.x, iResolution.y - gl_FragCoord.y));
-      }
-    `;
-
-    function compile(type, source) {
-      const shader = gl.createShader(type);
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(gl.getShaderInfoLog(shader));
-      }
-      return shader;
-    }
-
-    let program;
-    try {
-      program = gl.createProgram();
-      gl.attachShader(program, compile(gl.VERTEX_SHADER, vertex));
-      gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragment));
-      gl.linkProgram(program);
-      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
-      compileOut.textContent = 'SHADER OK';
-      compileOut.className = 'ok';
-    } catch (error) {
-      errorOut.textContent = error.message;
-      throw error;
-    }
-
-    gl.useProgram(program);
-    const position = gl.getAttribLocation(program, 'position');
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(position);
-    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-
-    const terminalCanvas = document.createElement('canvas');
-    terminalCanvas.width = canvas.width;
-    terminalCanvas.height = canvas.height;
-    const ctx = terminalCanvas.getContext('2d');
-    ctx.fillStyle = '#07101a';
-    ctx.fillRect(0, 0, terminalCanvas.width, terminalCanvas.height);
-    ctx.font = '20px Consolas, monospace';
-    const rows = [
-      '$ claude',
-      '',
-      '  Reading the repository and tracing the render pipeline...',
-      '  Editing src/renderer/generic.zig',
-      '  Running tests  [██████████████████░░]  91%',
-      '',
-      '  The terminal remains readable while stellar mass accumulates.',
-      '',
-      '  > _'
-    ];
-    rows.forEach((text, i) => {
-      ctx.fillStyle = i === 0 ? '#84d6a0' : i === 8 ? '#b7c9dc' : '#6f879e';
-      ctx.fillText(text, 34, 50 + i * 42);
-    });
-    const texture = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, terminalCanvas);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    const u = name => gl.getUniformLocation(program, name);
-    gl.uniform1i(u('iChannel0'), 0);
-    gl.uniform3f(u('iResolution'), canvas.width, canvas.height, 1);
-    gl.uniform1f(u('iTimeCursorChange'), 0);
-
-    function levelColor(level) {
-      const fill = Math.max(0, Math.min(250, Math.round(level * 250)));
-      const hi = fill >> 4, lo = fill & 15;
-      return [(0xf0 | (hi ^ lo ^ 5))/255, (0xb0 | hi)/255, lo/255, 1];
-    }
-    function massColor(tokens) {
-      const k = Math.max(0, Math.min(4095, Math.round(tokens/1000)));
-      return [(0xe0 | ((k>>8)&15))/255, (0xa0 | ((k>>4)&15))/255, (0x10 | (k&15))/255, 1];
-    }
-
-    let touring = false;
-    let tourStart = 0;
-    let dragging = false;
-    let manualPosition = null;
-    const stageButtons = checkpoints.map(([value, label]) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = label;
-      button.dataset.level = value;
-      button.addEventListener('click', () => {
-        touring = false;
-        document.querySelector('#tour').textContent = 'Auto tour';
-        slider.value = String(value);
-      });
-      document.querySelector('#stages').append(button);
-      return button;
-    });
-    document.querySelector('#tour').addEventListener('click', event => {
-      touring = !touring;
-      tourStart = performance.now();
-      event.currentTarget.textContent = touring ? 'Stop tour' : 'Auto tour';
-    });
-
-    document.querySelector('#capture').addEventListener('click', () => {
-      gl.finish();
-      const level = Number(slider.value);
-      canvas.toBlob(blob => {
-        if (!blob) return;
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `ghostty-supernova-${String(level).replace('.', '_')}.png`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      }, 'image/png');
-    });
-
-    function placeAtPointer(event) {
-      const bounds = canvas.getBoundingClientRect();
-      manualPosition = {
-        x: (event.clientX - bounds.left) * canvas.width / bounds.width,
-        y: (event.clientY - bounds.top) * canvas.height / bounds.height
-      };
-    }
-
-    canvas.addEventListener('pointerdown', event => {
-      dragging = true;
-      canvas.classList.add('dragging');
-      canvas.setPointerCapture(event.pointerId);
-      placeAtPointer(event);
-    });
-    canvas.addEventListener('pointermove', event => {
-      if (dragging) placeAtPointer(event);
-    });
-    canvas.addEventListener('pointerup', event => {
-      dragging = false;
-      canvas.classList.remove('dragging');
-      canvas.releasePointerCapture(event.pointerId);
-    });
-    canvas.addEventListener('pointercancel', () => {
-      dragging = false;
-      canvas.classList.remove('dragging');
-    });
-    document.querySelector('#reset-position').addEventListener('click', () => {
-      manualPosition = null;
-    });
-
-    function frame(now) {
-      if (touring) slider.value = String(((now - tourStart) / 350) % 101);
-      const level = Number(slider.value) / 100;
-      const tokens = Math.round(level * 200000);
-      stageOut.textContent = `${Math.round(level*100)}% · ${stageName(level)}`;
-      massOut.textContent = `MASS ${Math.round(tokens/1000)}K`;
-      stageButtons.forEach(button => button.classList.toggle(
-        'active', stageName(Number(button.dataset.level) / 100) === stageName(level)
-      ));
-      gl.uniform1f(u('iTime'), now / 1000);
-      gl.uniform4fv(u('iCurrentCursorColor'), levelColor(level));
-      gl.uniform4fv(u('iPreviousCursorColor'), massColor(tokens));
-      gl.uniform4f(
-        u('iMouse'),
-        manualPosition?.x ?? 0,
-        manualPosition?.y ?? 0,
-        manualPosition ? 1 : 0,
-        dragging ? 1 : 0
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-  </script>
+  <script type="module" src="./preview-renderer.js"></script>
 </body>
 </html>

@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Replaced the legacy GLSL-based browser preview with a Canvas renderer that
+  mirrors the current Windows overlay's six stellar stages and animations.
 - Restored the smoother visible-overlay animation cadence while retaining the
   active-stage render-tree, caching, allocation, and hidden-refresh savings.
 - Reworked the Windows control layout so the compact bar and details card stay
