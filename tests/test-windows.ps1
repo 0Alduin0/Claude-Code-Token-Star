@@ -253,6 +253,8 @@ try {
     $installProject = Join-Path $TemporaryRoot "InstallFromProject"
     $hiddenClone = Join-Path $installProject ".claude-token-star"
     [System.IO.Directory]::CreateDirectory($hiddenClone) | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $hiddenClone "VERSION"), "test`n", $Utf8NoBom)
+    [System.IO.File]::WriteAllText((Join-Path $hiddenClone "install.ps1"), "# test`n", $Utf8NoBom)
     Push-Location -LiteralPath $hiddenClone
     try {
         & (Join-Path $WindowsSource "install.ps1") `
@@ -265,6 +267,18 @@ try {
     finally { Pop-Location }
     $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
     Assert-True (Test-SameDirectoryPath ([string]$projectScope.root) $installProject) "hidden clone was incorrectly used as the project scope"
+
+    # The CLI passes ProjectPath explicitly, so that path must be normalized too.
+    & (Join-Path $WindowsSource "install.ps1") `
+        -ClaudeSettings $ClaudeSettings `
+        -TerminalSettings $TerminalSettings `
+        -RuntimeRoot $RuntimeRoot `
+        -ProjectPath $hiddenClone `
+        -SkipVersionCheck `
+        -NoLaunch | Out-Null
+    $projectScope = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "project-scope.json")) | ConvertFrom-Json
+    Assert-True (Test-SameDirectoryPath ([string]$projectScope.root) $installProject) `
+        "explicit hidden-clone ProjectPath was incorrectly used as the project scope"
 
     & (Join-Path $WindowsSource "uninstall.ps1") -ClaudeSettings $ClaudeSettings | Out-Null
     $settings = [System.IO.File]::ReadAllText($ClaudeSettings) | ConvertFrom-Json

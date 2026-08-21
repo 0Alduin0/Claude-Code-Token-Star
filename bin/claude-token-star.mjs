@@ -11,9 +11,10 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { findPython } from "./python-runtime.mjs";
+import { resolveProjectRoot } from "./project-root.mjs";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const projectRoot = process.cwd();
+const projectRoot = resolveProjectRoot(process.cwd());
 const installRoot = join(projectRoot, ".claude-token-star");
 const projectClaudeSettings = join(
   projectRoot,

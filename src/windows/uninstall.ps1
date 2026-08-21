@@ -8,8 +8,11 @@ $ErrorActionPreference = "Stop"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $StateName = "ghostty-supernova.windows.install.json"
 $ProjectPath = [System.IO.Path]::GetFullPath($ProjectPath)
-if (-not $PSBoundParameters.ContainsKey("ProjectPath") -and
-    (Split-Path -Leaf $ProjectPath) -eq ".claude-token-star") {
+$managedProjectDirectory = (Test-Path -LiteralPath (Join-Path $ProjectPath "VERSION") -PathType Leaf) -and
+    ((Test-Path -LiteralPath (Join-Path $ProjectPath "uninstall.ps1") -PathType Leaf) -or
+     (Test-Path -LiteralPath (Join-Path $ProjectPath "src\windows\uninstall.ps1") -PathType Leaf))
+if ((Split-Path -Leaf $ProjectPath) -eq ".claude-token-star" -and
+    (-not $PSBoundParameters.ContainsKey("ProjectPath") -or $managedProjectDirectory)) {
     $ProjectPath = Split-Path -Parent $ProjectPath
 }
 if ([string]::IsNullOrWhiteSpace($ClaudeSettings)) {

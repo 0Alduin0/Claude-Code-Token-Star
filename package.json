@@ -10,6 +10,7 @@
   "files": [
     "bin/claude-token-star.mjs",
     "bin/python-runtime.mjs",
+    "bin/project-root.mjs",
     "assets/preview",
     "scripts/windows/install.cmd",
     "scripts/windows/token-test.cmd",

@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { findPython } from "../bin/python-runtime.mjs";
+import { resolveProjectRoot } from "../bin/project-root.mjs";
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const fileVersion = readFileSync("VERSION", "utf8").trim();
@@ -59,5 +69,31 @@ assert.deepEqual(
   "Python discovery order changed",
 );
 assert.match(pythonCalls[0][1][1], /3, 10/, "Python 3.10+ check missing");
+
+const rootTest = mkdtempSync(join(tmpdir(), "claude-token-star-root-"));
+try {
+  const hiddenInstall = join(rootTest, ".claude-token-star");
+  mkdirSync(hiddenInstall);
+  writeFileSync(join(hiddenInstall, "VERSION"), "test\n");
+  writeFileSync(join(hiddenInstall, "install.ps1"), "# test\n");
+  assert.equal(
+    resolveProjectRoot(hiddenInstall, "win32"),
+    resolve(rootTest),
+    "commands run inside the managed Windows install must target its parent project",
+  );
+  assert.equal(
+    resolveProjectRoot(hiddenInstall, "linux"),
+    resolve(hiddenInstall),
+    "an incomplete install must not be mistaken for the current platform's managed install",
+  );
+  writeFileSync(join(hiddenInstall, "install.sh"), "# test\n");
+  assert.equal(
+    resolveProjectRoot(hiddenInstall, "linux"),
+    resolve(rootTest),
+    "commands run inside the managed Unix install must target its parent project",
+  );
+} finally {
+  rmSync(rootTest, { recursive: true, force: true });
+}
 
 console.log("CLI contract OK");

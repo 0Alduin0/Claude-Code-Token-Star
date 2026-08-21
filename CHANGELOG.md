@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Fixed commands launched from the managed `.claude-token-star` directory so
+  they target the parent project instead of creating a nested, inactive install.
 - Replaced the hand-drawn browser approximation with transparent animation
   assets rendered directly by WPF, keeping all six preview stages visually
   identical to the Windows overlay.
