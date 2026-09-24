@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 2.7.0 - 2026-09-24
 
 - Tagged releases now publish the package to npm with provenance before the
   GitHub release is created, so `npx claude-token-star` becomes available.
