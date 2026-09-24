@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 2.7.1 - 2026-09-24
 
 - Made `npx --yes claude-token-star@latest` the documented install command;
   installing from GitHub remains available for unreleased changes.
