@@ -19,6 +19,9 @@ jobs:
           node-version: "22"
           cache: npm
           registry-url: "https://registry.npmjs.org"
+      # Trusted publishing (OIDC) needs npm 11.5.1+; Node 22 bundles npm 10.
+      - name: Update npm
+        run: npm install --global npm@11
       - run: npm ci
       - run: npm test
       - name: Verify tag matches package version
@@ -29,20 +32,17 @@ jobs:
         run: npm pack
       # Publish before creating the GitHub release so a failed publish never
       # leaves a release that points users at an unavailable npm version.
-      # Re-running the workflow skips versions that are already on npm.
+      # npm authenticates through this workflow's trusted publisher (OIDC), so
+      # no token secret is involved. Re-runs skip versions already on npm; the
+      # check reads the public registry directly because setup-node configures
+      # a placeholder token that can make `npm view` fail.
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PACKAGE=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
+          if curl -fs -o /dev/null "https://registry.npmjs.org/${PACKAGE}/${VERSION}"; then
             echo "${PACKAGE}@${VERSION} is already published; skipping."
             exit 0
-          fi
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error title=npm publish::The NPM_TOKEN repository secret is not configured."
-            exit 1
           fi
           npm publish --provenance --access public
       - name: Create GitHub release

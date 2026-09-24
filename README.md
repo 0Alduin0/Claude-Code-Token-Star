@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/0Alduin0/Claude-Code-Token-Star/actions/workflows/test.yml/badge.svg)](https://github.com/0Alduin0/Claude-Code-Token-Star/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/0Alduin0/Claude-Code-Token-Star)](https://github.com/0Alduin0/Claude-Code-Token-Star/releases)
+[![npm](https://img.shields.io/npm/v/claude-token-star)](https://www.npmjs.com/package/claude-token-star)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Live star overlay that visualizes Claude Code context usage — six stellar
@@ -39,11 +40,15 @@ VS Code, or other terminals and editors.
 
 ## Quick install
 
-You need Claude Code, Git, and Node.js 18+. Run this from your project root:
+You need Claude Code and Node.js 18+. Run this from your project root:
 
 ```sh
-npx --yes github:0Alduin0/Claude-Code-Token-Star
+npx --yes claude-token-star@latest
 ```
+
+`@latest` makes npx fetch the newest release instead of reusing a cached copy.
+To try unreleased changes from `main`, use
+`npx --yes github:0Alduin0/Claude-Code-Token-Star` instead; that also needs Git.
 
 On Windows, the installer uses `ExecutionPolicy Bypass` only for the child
 PowerShell process because the local scripts are not code-signed. It does not
@@ -60,13 +65,8 @@ place.
 Update by running the same command again. Remove it with:
 
 ```sh
-npx --yes github:0Alduin0/Claude-Code-Token-Star uninstall
+npx --yes claude-token-star uninstall
 ```
-
-Tagged releases are also published to npm as
-[`claude-token-star`](https://www.npmjs.com/package/claude-token-star). Once a
-release is listed there, `npx claude-token-star` accepts the same commands and
-does not need Git.
 
 <details>
 <summary>Manual installation</summary>
@@ -130,8 +130,8 @@ The setting persists across Claude sessions. Run either command from the
 project where Token Star is installed:
 
 ```powershell
-npx --yes github:0Alduin0/Claude-Code-Token-Star off
-npx --yes github:0Alduin0/Claude-Code-Token-Star on
+npx --yes claude-token-star off
+npx --yes claude-token-star on
 ```
 
 `off` closes the current overlay process and prevents status refreshes from

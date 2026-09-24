@@ -47,14 +47,16 @@ the pull request. Keep generated media compressed and place it in `assets/`.
 
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which tests the
 package, publishes it to npm with provenance, and then creates the GitHub
-release with the same tarball attached. Before tagging:
+release with the same tarball attached. npm authenticates the workflow as a
+trusted publisher (OIDC), so no npm token is stored in the repository. Before
+tagging:
 
 1. Run `npm version X.Y.Z --no-git-tag-version` and write the same version to
    `VERSION` (`npm test` fails when `VERSION` and `package.json` differ, and
    the workflow rejects a tag that does not match `package.json`).
 2. Move the `Unreleased` changelog entries under the new version.
-3. Make sure the repository has an `NPM_TOKEN` Actions secret with publish
-   rights for `claude-token-star`.
+3. Make sure `claude-token-star` on npmjs.com lists this repository's
+   `release.yml` under **Settings → Trusted publishing**.
 
 Re-running a failed release skips an npm version that is already published.
 

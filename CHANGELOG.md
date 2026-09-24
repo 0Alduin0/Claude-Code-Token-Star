@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Made `npx --yes claude-token-star@latest` the documented install command;
+  installing from GitHub remains available for unreleased changes.
+- Switched npm releases to trusted publishing, so the repository no longer
+  stores an npm token.
+
 ## 2.7.0 - 2026-09-24
 
 - Tagged releases now publish the package to npm with provenance before the
