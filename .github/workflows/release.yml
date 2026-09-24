@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -17,6 +18,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm test
       - name: Verify tag matches package version
@@ -25,6 +27,24 @@ jobs:
           test "${GITHUB_REF_NAME}" = "v${PACKAGE_VERSION}"
       - name: Build npm tarball
         run: npm pack
+      # Publish before creating the GitHub release so a failed publish never
+      # leaves a release that points users at an unavailable npm version.
+      # Re-running the workflow skips versions that are already on npm.
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PACKAGE=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE}@${VERSION} is already published; skipping."
+            exit 0
+          fi
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error title=npm publish::The NPM_TOKEN repository secret is not configured."
+            exit 1
+          fi
+          npm publish --provenance --access public
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

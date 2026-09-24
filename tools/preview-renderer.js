@@ -169,7 +169,9 @@ function drawOverlay(level) {
   return geometry;
 }
 
-const requestedLevel = Number(new URLSearchParams(location.search).get("level"));
+// Number(null) is 0, so only honor ?level= when it is actually present.
+const levelParam = new URLSearchParams(location.search).get("level");
+const requestedLevel = levelParam === null || levelParam.trim() === "" ? NaN : Number(levelParam);
 if (Number.isFinite(requestedLevel)) slider.value = String(Math.max(0, Math.min(100, requestedLevel)));
 
 const usageToggle = document.querySelector("#usage-toggle");

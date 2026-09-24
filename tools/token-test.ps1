@@ -44,8 +44,15 @@ switch ($Action.ToLowerInvariant()) {
         exit 2
     }
     default {
+        # Parse with the invariant culture: under tr-TR and similar cultures "."
+        # is a group separator, so 0.5 would silently become 5.
         $level = 0.0
-        if (-not [double]::TryParse($Action.TrimEnd('%'), [ref]$level)) {
+        if (-not [double]::TryParse(
+            $Action.TrimEnd('%'),
+            [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$level
+        )) {
             throw "LEVEL must be a number such as 82, 82%, or 0.82."
         }
         if ($Action.EndsWith("%")) { $level = $level / 100.0 }

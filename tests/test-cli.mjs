@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -94,6 +95,54 @@ try {
   );
 } finally {
   rmSync(rootTest, { recursive: true, force: true });
+}
+
+if (process.platform !== "win32") {
+  // End-to-end Ghostty install in a sandbox: it must stay inside the project
+  // and never touch the user's own Claude or Ghostty configuration.
+  const sandbox = mkdtempSync(join(tmpdir(), "claude-token-star-e2e-"));
+  try {
+    const project = join(sandbox, "project");
+    mkdirSync(project);
+    const env = {
+      ...process.env,
+      HOME: join(sandbox, "home"),
+      XDG_CONFIG_HOME: join(sandbox, "config"),
+      CLAUDE_CONFIG_DIR: join(sandbox, "home", ".claude"),
+    };
+    const runCli = (...args) => spawnSync(process.execPath, [resolve(cli), ...args], {
+      cwd: project,
+      env,
+      encoding: "utf8",
+    });
+    const localSettings = join(project, ".claude", "settings.local.json");
+    const ghosttyConfig = join(env.XDG_CONFIG_HOME, "ghostty", "config.ghostty");
+
+    const install = runCli("install");
+    assert.equal(install.status, 0, install.stdout + install.stderr);
+    const settings = JSON.parse(readFileSync(localSettings, "utf8"));
+    assert.match(settings.statusLine.command, /\.claude-token-star\/token-mass\.py/);
+    assert.ok(
+      !existsSync(join(env.CLAUDE_CONFIG_DIR, "settings.json")),
+      "Unix install must not write the user-level Claude settings",
+    );
+    assert.ok(
+      statSync(join(project, ".claude-token-star", "token-test.sh")).mode & 0o100,
+      "staged token-test.sh must be executable",
+    );
+    assert.match(readFileSync(ghosttyConfig, "utf8"), /\.claude-token-star\/supernova\.glsl/);
+
+    const doctor = runCli("doctor");
+    assert.equal(doctor.status, 0, doctor.stdout + doctor.stderr);
+
+    const uninstall = runCli("uninstall");
+    assert.equal(uninstall.status, 0, uninstall.stdout + uninstall.stderr);
+    assert.ok(!existsSync(join(project, ".claude-token-star")), "install directory was left behind");
+    assert.equal(JSON.parse(readFileSync(localSettings, "utf8")).statusLine, undefined);
+    assert.doesNotMatch(readFileSync(ghosttyConfig, "utf8"), /ghostty-supernova/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
 }
 
 console.log("CLI contract OK");

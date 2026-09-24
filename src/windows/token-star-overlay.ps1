@@ -596,7 +596,12 @@ function Get-RateSummary {
     $fiveHour = $State.rate_limits.five_hour
     $used = [double]$fiveHour.used_percentage
     if ($used -lt 0.0) { return "5H -- | --" }
-    return ("5H %{0} | {1}" -f [Math]::Round($used), (Format-ResetRemaining ([long]$fiveHour.resets_at)))
+    return ("5H {0} | {1}" -f (Format-Percent $used), (Format-ResetRemaining ([long]$fiveHour.resets_at)))
+}
+
+function Format-Percent([double]$Value) {
+    if ($Value -lt 0.0) { return "--" }
+    return "$([Math]::Round($Value))%"
 }
 
 function Format-UiText([string]$Value, [string]$Fallback = "--") {
@@ -648,9 +653,9 @@ function Get-DetailsText {
         "Cache read      $(Format-TokenDetail (Get-BreakdownToken $breakdown 'cache_read_input_tokens' 0L))"
         "Remaining       $(Format-TokenDetail (Get-BreakdownToken $breakdown 'remaining_tokens' 0L))"
         ""
-        "5-hour limit    $(if ([double]$limits.five_hour.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.five_hour.used_percentage) } else { '--' })"
+        "5-hour limit    $(Format-Percent ([double]$limits.five_hour.used_percentage))"
         "Reset in        $(Format-ResetRemaining ([long]$limits.five_hour.resets_at))"
-        "7-day limit     $(if ([double]$limits.seven_day.used_percentage -ge 0) { '%' + [Math]::Round([double]$limits.seven_day.used_percentage) } else { '--' })"
+        "7-day limit     $(Format-Percent ([double]$limits.seven_day.used_percentage))"
     ) -join "`n"
 }
 
@@ -1686,6 +1691,10 @@ if ($SelfTest) {
     if ($DetailsText.Text -notmatch "Model\s+Opus 5" -or $DetailsText.Text -notmatch "Effort\s+Extra high" -or
         $DetailsText.Text -notmatch "Active sessions\s+2") {
         throw "Token Star overlay model/effort self-test failed."
+    }
+    if ((Get-RateSummary) -notmatch "^5H 61% \| " -or $DetailsText.Text -notmatch "5-hour limit\s+61%" -or
+        $DetailsText.Text -notmatch "7-day limit\s+34%") {
+        throw "Token Star overlay rate-limit percentage self-test failed."
     }
     $expectedMassText = "MASS $(Format-Mass ([long]$State.tokens)) / $(Format-Mass (Get-BreakdownToken $State.breakdown 'context_window_size' 0L))"
     if ($MassText.Text -ne $expectedMassText) {

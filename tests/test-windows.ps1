@@ -159,6 +159,23 @@ try {
     Assert-True (Test-Path -LiteralPath (Join-Path $RuntimeRoot "overlay.enabled")) `
         "on command did not re-enable the overlay"
     $env:GHOSTTY_SUPERNOVA_TERMINAL_SETTINGS = $TerminalSettings
+
+    # Manual levels must not depend on the user's culture; tr-TR treats "." as
+    # a group separator and used to turn 0.5 into 5%.
+    $originalCulture = [Threading.Thread]::CurrentThread.CurrentCulture
+    Push-Location -LiteralPath $ScopedProject
+    try {
+        [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::GetCultureInfo("tr-TR")
+        & (Join-Path $ToolsRoot "token-test.ps1") 0.5 -ClaudeSettings $ClaudeSettings | Out-Null
+    }
+    finally {
+        [Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+        Pop-Location
+    }
+    $manualState = [System.IO.File]::ReadAllText((Join-Path $RuntimeRoot "token-state.json")) | ConvertFrom-Json
+    Assert-True ([Math]::Abs([double]$manualState.level - 0.5) -lt 0.000001) `
+        "manual token level depends on the current culture (got $($manualState.level))"
+
     $before = (Get-Item -LiteralPath $TerminalSettings).LastWriteTimeUtc
     Start-Sleep -Milliseconds 20
     $fiveHourReset = [DateTimeOffset]::UtcNow.AddHours(2).AddMinutes(23).ToUnixTimeSeconds()
@@ -341,9 +358,13 @@ try {
         Assert-True ($settingsBAfter.statusLine.command -eq $settingsB.statusLine.command) `
             "uninstalling project A changed project B settings"
 
+        # A settings file the user already deleted must not be recreated.
+        Remove-Item -LiteralPath $settingsBPath -Force
         & (Join-Path $WindowsSource "uninstall.ps1") -ProjectPath $OtherProject | Out-Null
         Assert-True (-not (Test-Path -LiteralPath ([string]$stateB.runtime_root))) `
             "uninstall left project B runtime behind"
+        Assert-True (-not (Test-Path -LiteralPath $settingsBPath)) `
+            "uninstall recreated a deleted Claude settings file"
     }
     finally { $env:LOCALAPPDATA = $oldLocalAppData }
 

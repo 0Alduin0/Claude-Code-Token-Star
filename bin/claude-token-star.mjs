@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -90,7 +91,13 @@ function stageRuntime() {
   for (const file of runtimeFiles) {
     const source = join(packageRoot, file.source);
     if (!existsSync(source)) fail(`package is missing ${file.source}`);
-    cpSync(source, join(installRoot, file.destination), { force: true });
+    const destination = join(installRoot, file.destination);
+    cpSync(source, destination, { force: true });
+    // Package archives do not reliably keep the executable bit, and the
+    // README runs ./.claude-token-star/token-test.sh directly.
+    if (process.platform !== "win32" && /\.(sh|py)$/.test(destination)) {
+      chmodSync(destination, 0o755);
+    }
   }
 }
 
@@ -151,7 +158,12 @@ if (["-h", "--help", "help"].includes(command)) {
       ...forwardedArgs,
     ]);
   } else {
-    run("sh", [join(installRoot, "install.sh"), ...forwardedArgs]);
+    run("sh", [
+      join(installRoot, "install.sh"),
+      "--claude-settings",
+      projectClaudeSettings,
+      ...forwardedArgs,
+    ]);
   }
 } else if (command === "uninstall") {
   if (process.platform === "win32") {
@@ -163,7 +175,12 @@ if (["-h", "--help", "help"].includes(command)) {
       ...forwardedArgs,
     ]);
   } else {
-    run("sh", [installedFile("uninstall.sh"), ...forwardedArgs]);
+    run("sh", [
+      installedFile("uninstall.sh"),
+      "--claude-settings",
+      projectClaudeSettings,
+      ...forwardedArgs,
+    ]);
   }
   rmSync(installRoot, { recursive: true, force: true });
   console.log(`Removed ${installRoot}`);
@@ -182,6 +199,7 @@ if (["-h", "--help", "help"].includes(command)) {
     runPython([
       installedFile("token-mass.py"),
       `--${command}`,
+      ...(command === "doctor" ? ["--claude-settings", projectClaudeSettings] : []),
       ...forwardedArgs,
     ]);
   }

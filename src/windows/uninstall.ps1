@@ -122,7 +122,7 @@ if ($statusProperty -and $statusProperty.Value.PSObject.Properties["command"] -a
     else { $settings.PSObject.Properties.Remove("statusLine") }
 }
 Remove-HookCommands $settings $commands
-Write-JsonAtomic $ClaudeSettings $settings
+if (Test-Path -LiteralPath $ClaudeSettings) { Write-JsonAtomic $ClaudeSettings $settings }
 
 $runtimeRoot = if ($state.PSObject.Properties["runtime_root"]) {
     [System.IO.Path]::GetFullPath([string]$state.runtime_root)

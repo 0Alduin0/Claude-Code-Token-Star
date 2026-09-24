@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Tagged releases now publish the package to npm with provenance before the
+  GitHub release is created, so `npx claude-token-star` becomes available.
+- Scoped Linux and macOS installs to the project's
+  `.claude/settings.local.json` instead of the user-wide Claude settings, and
+  migrated installs made by earlier releases. Uninstalling one project no
+  longer removes a Ghostty shader block that another project still uses.
+- Made staged `.sh` and Python scripts executable so
+  `./.claude-token-star/token-test.sh` runs on Linux and macOS.
+- Fixed the Linux terminal fallback, which stopped at the first ancestor
+  without a TTY because procps prints `?` rather than `??`.
+- Fixed `token-test.ps1` parsing levels such as `0.5` as `5` under cultures
+  that use `.` as a group separator, such as Turkish.
+- Fixed the Windows overlay showing rate limits as `%61` instead of `61%`.
+- Stopped the Windows uninstaller from recreating a deleted Claude settings
+  file.
+- Fixed the browser preview ignoring its 82% starting level when opened
+  without a `?level=` parameter.
 - Fixed commands launched from the managed `.claude-token-star` directory so
   they target the parent project instead of creating a nested, inactive install.
 - Replaced the hand-drawn browser approximation with transparent animation

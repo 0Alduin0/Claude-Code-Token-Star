@@ -29,7 +29,13 @@ MASS_BASE = (0xE0, 0xA0, 0x10)
 CONFIG_BEGIN = "# >>> ghostty-supernova >>>"
 CONFIG_END = "# <<< ghostty-supernova <<<"
 INSTALL_STATE = "ghostty-supernova.install.json"
+MANAGED_DIRECTORY = ".claude-token-star"
 RESET_PACKET = b"\033]112\007"
+GHOSTTY_BLOCK = re.compile(
+    rf"(?:\r?\n)?{re.escape(CONFIG_BEGIN)}.*?{re.escape(CONFIG_END)}(?:\r?\n)?",
+    re.DOTALL,
+)
+GHOSTTY_SHADER_LINE = re.compile(r"^custom-shader = (.+)$", re.MULTILINE)
 
 
 def finite_number(value: object) -> bool:
@@ -58,7 +64,8 @@ def session_tty() -> str | None:
             return None
         if len(result) < 2:
             return None
-        if result[1] != "??":
+        # procps prints "?" and BSD ps prints "??" for a process without a TTY.
+        if result[1] not in {"?", "??"}:
             return "/dev/" + result[1]
         if not result[0].isdigit() or int(result[0]) <= 1:
             return None
@@ -204,9 +211,30 @@ def status_line(data: dict, level: float, used_tokens: int) -> str:
     return "\033[2m" + " · ".join(parts) + "\033[0m"
 
 
-def default_config_paths() -> tuple[Path, Path]:
-    """Return Claude and Ghostty config paths using their standard locations."""
+def user_claude_settings() -> Path:
     claude_root = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
+    return claude_root / "settings.json"
+
+
+def managed_project_root(script: Path) -> Path | None:
+    """Return the project that owns a .claude-token-star install, if any."""
+    for parent in script.parents:
+        if parent.name == MANAGED_DIRECTORY:
+            return parent.parent
+    return None
+
+
+def default_config_paths(script: Path | None = None) -> tuple[Path, Path]:
+    """Return Claude and Ghostty config paths for this bridge.
+
+    A bridge inside a project's .claude-token-star directory is scoped to that
+    project's .claude/settings.local.json; a standalone copy uses the user's
+    Claude settings. Ghostty has a single user-level configuration.
+    """
+    project = managed_project_root((script or Path(__file__)).resolve())
+    claude_settings = (
+        project / ".claude" / "settings.local.json" if project else user_claude_settings()
+    )
     xdg_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     ghostty_root = xdg_root / "ghostty"
     modern = ghostty_root / "config.ghostty"
@@ -222,7 +250,7 @@ def default_config_paths() -> tuple[Path, Path]:
         if mac_modern.exists() or mac_legacy.exists():
             ghostty_config = mac_modern if mac_modern.exists() else mac_legacy
 
-    return claude_root / "settings.json", ghostty_config
+    return claude_settings, ghostty_config
 
 
 def bridge_command(script: Path) -> str:
@@ -300,12 +328,44 @@ def remove_hook_commands(settings: dict, commands: set[str]) -> None:
         settings.pop("hooks", None)
 
 
-def strip_ghostty_block(config: str) -> str:
-    marked = re.compile(
-        rf"(?:\r?\n)?{re.escape(CONFIG_BEGIN)}.*?{re.escape(CONFIG_END)}(?:\r?\n)?",
-        re.DOTALL,
-    )
-    return marked.sub("\n", config).rstrip()
+def strip_ghostty_block(config: str, owner: Path | None = None) -> str:
+    """Remove marked blocks.
+
+    With an owner shader, a block that belongs to another project's install is
+    kept while that install's shader still exists, so uninstalling one project
+    cannot switch off the star for another.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        if owner is not None:
+            shader = GHOSTTY_SHADER_LINE.search(match.group(0))
+            target = shader.group(1).strip() if shader else ""
+            if target and target != owner.as_posix() and Path(target).is_file():
+                return match.group(0)
+        return "\n"
+
+    return GHOSTTY_BLOCK.sub(replace, config).rstrip()
+
+
+def remove_user_level_install(claude_settings: Path, command: str) -> None:
+    """Remove an earlier user-level install that runs this same bridge.
+
+    Releases up to 2.6.1 wrote the bridge into ~/.claude/settings.json.
+    Leaving it there would keep a second copy of the hooks and, after
+    uninstall, a status line that points at a deleted script in every project.
+    """
+    user_settings = user_claude_settings()
+    if claude_settings.resolve() == user_settings.resolve():
+        return
+    try:
+        state = read_json_object(state_path_for(user_settings), "Install state")
+        if state.get("command") == command:
+            uninstall(user_settings)
+    except (OSError, TypeError, ValueError) as error:
+        print(
+            f"Warning: could not remove the previous install from {user_settings}: {error}",
+            file=sys.stderr,
+        )
 
 
 def install(claude_settings: Path, ghostty_config: Path) -> None:
@@ -319,6 +379,7 @@ def install(claude_settings: Path, ghostty_config: Path) -> None:
     state_path = state_path_for(claude_settings)
     state = read_json_object(state_path, "Install state")
     command = bridge_command(script)
+    remove_user_level_install(claude_settings, command)
     previous_command = state.get("command")
     commands_to_replace = {command}
     if isinstance(previous_command, str):
@@ -377,13 +438,17 @@ def install(claude_settings: Path, ghostty_config: Path) -> None:
         script.chmod(script.stat().st_mode | 0o111)
 
 
-def uninstall(claude_settings: Path, ghostty_config: Path | None = None) -> None:
-    """Remove only this project's settings and restore a replaced status line."""
+def uninstall(claude_settings: Path, ghostty_config: Path | None = None) -> Path | None:
+    """Remove only this project's settings and restore a replaced status line.
+
+    Returns the Ghostty config whose marked block was removed, if any.
+    """
     state_path = state_path_for(claude_settings)
     state = read_json_object(state_path, "Install state")
     settings = read_json_object(claude_settings, "Claude settings")
 
-    current_command = bridge_command(Path(__file__).resolve())
+    script = Path(__file__).resolve()
+    current_command = bridge_command(script)
     installed_command = state.get("command")
     commands = {current_command}
     if isinstance(installed_command, str):
@@ -411,13 +476,21 @@ def uninstall(claude_settings: Path, ghostty_config: Path | None = None) -> None
         ghostty_config = (
             Path(configured_path) if isinstance(configured_path, str) else None
         )
+    cleaned_config = None
     if ghostty_config and ghostty_config.exists():
-        remaining = strip_ghostty_block(ghostty_config.read_text(encoding="utf-8"))
-        atomic_write_text(ghostty_config, remaining + ("\n" if remaining else ""))
+        original = ghostty_config.read_text(encoding="utf-8")
+        remaining = strip_ghostty_block(
+            original, owner=script.with_name("supernova.glsl")
+        )
+        if remaining != original.rstrip():
+            atomic_write_text(ghostty_config, remaining + ("\n" if remaining else ""))
+            cleaned_config = ghostty_config
 
     if state_path.exists():
         state_path.unlink()
+    remove_user_level_install(claude_settings, current_command)
     emit(RESET_PACKET)
+    return cleaned_config
 
 
 def install_main(argv: list[str]) -> None:
@@ -444,19 +517,17 @@ def install_main(argv: list[str]) -> None:
 
 
 def uninstall_main(argv: list[str]) -> None:
-    default_claude, default_ghostty = default_config_paths()
+    default_claude, _ = default_config_paths()
     parser = argparse.ArgumentParser(description="Uninstall Ghostty Supernova")
     parser.add_argument("--claude-settings", type=Path, default=default_claude)
     parser.add_argument("--ghostty-config", type=Path, default=None)
     args = parser.parse_args(argv)
     claude_settings = args.claude_settings.expanduser()
     ghostty_config = args.ghostty_config.expanduser() if args.ghostty_config else None
-    uninstall(claude_settings, ghostty_config)
+    cleaned_config = uninstall(claude_settings, ghostty_config)
     print(f"Removed Ghostty Supernova from {claude_settings}")
-    if ghostty_config or default_ghostty.exists():
-        print(
-            f"Removed its marked Ghostty block from {ghostty_config or default_ghostty}"
-        )
+    if cleaned_config:
+        print(f"Removed its marked Ghostty block from {cleaned_config}")
 
 
 def parse_level(value: str) -> float:

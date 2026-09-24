@@ -1,7 +1,8 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\YOU\\AppData\\Local\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova-PROJECT_HASH\\token-mass-windows.ps1\""
+    "command": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\YOU\\AppData\\Local\\Microsoft\\Windows Terminal\\Fragments\\GhosttySupernova-PROJECT_HASH\\token-mass-windows.ps1\"",
+    "refreshInterval": 5
   },
   "hooks": {
     "SessionStart": [

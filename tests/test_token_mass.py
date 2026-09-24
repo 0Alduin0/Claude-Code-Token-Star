@@ -198,8 +198,160 @@ class TerminalTransportTests(unittest.TestCase):
             self.assertEqual(token_mass.session_tty(), "/dev/pts/4")
         self.assertEqual(run.call_count, 2)
 
+    def test_session_tty_skips_linux_processes_without_tty(self) -> None:
+        no_tty = mock.MagicMock(stdout="22 ?\n")
+        found = mock.MagicMock(stdout="1 pts/4\n")
+        with (
+            mock.patch.object(token_mass.os, "name", "posix"),
+            mock.patch.object(token_mass.os, "getppid", return_value=11),
+            mock.patch.object(
+                token_mass.subprocess, "run", side_effect=[no_tty, found]
+            ),
+        ):
+            self.assertEqual(token_mass.session_tty(), "/dev/pts/4")
+
 
 class InstallerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Never read or rewrite the developer's real ~/.claude settings.
+        user_root = tempfile.TemporaryDirectory()
+        self.addCleanup(user_root.cleanup)
+        self.user_settings = Path(user_root.name) / "settings.json"
+        patcher = mock.patch.object(
+            token_mass, "user_claude_settings", return_value=self.user_settings
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.command = token_mass.bridge_command(Path(token_mass.__file__).resolve())
+        self.shader = Path(token_mass.__file__).resolve().with_name("supernova.glsl")
+
+    def bridge_settings(self, extra: dict | None = None) -> dict:
+        hook = {"hooks": [{"type": "command", "command": self.command, "timeout": 5}]}
+        return {
+            **(extra or {}),
+            "statusLine": {"type": "command", "command": self.command},
+            "hooks": {"SessionStart": [hook], "SessionEnd": [hook]},
+        }
+
+    def write_user_level_install(self, command: str, ghostty_path: Path) -> None:
+        self.user_settings.write_text(
+            json.dumps(self.bridge_settings({"permissions": {"allow": ["Read"]}})),
+            encoding="utf-8",
+        )
+        (self.user_settings.parent / token_mass.INSTALL_STATE).write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "had_status_line": True,
+                    "previous_status_line": {"type": "command", "command": "old-status"},
+                    "command": command,
+                    "ghostty_config": str(ghostty_path),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_default_settings_are_scoped_to_the_owning_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory).resolve() / "project"
+            expected = project / ".claude" / "settings.local.json"
+            for script in (
+                project / ".claude-token-star" / "token-mass.py",
+                project / ".claude-token-star" / "src" / "ghostty" / "token-mass.py",
+            ):
+                with self.subTest(script=script):
+                    claude, _ = token_mass.default_config_paths(script)
+                    self.assertEqual(claude, expected)
+            standalone = Path(directory) / "clone" / "token-mass.py"
+            claude, _ = token_mass.default_config_paths(standalone)
+            self.assertEqual(claude, self.user_settings)
+
+    def test_install_moves_user_level_install_of_this_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings_path = root / "project" / ".claude" / "settings.local.json"
+            ghostty_path = root / "config.ghostty"
+            self.write_user_level_install(self.command, ghostty_path)
+
+            with mock.patch.object(token_mass, "emit"):
+                token_mass.install(settings_path, ghostty_path)
+
+            user = json.loads(self.user_settings.read_text(encoding="utf-8"))
+            self.assertEqual(user["statusLine"]["command"], "old-status")
+            self.assertEqual(user["permissions"], {"allow": ["Read"]})
+            self.assertNotIn("hooks", user)
+            self.assertFalse(
+                (self.user_settings.parent / token_mass.INSTALL_STATE).exists()
+            )
+            local = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertEqual(local["statusLine"]["command"], self.command)
+            config = ghostty_path.read_text(encoding="utf-8")
+            self.assertEqual(config.count(token_mass.CONFIG_BEGIN), 1)
+
+    def test_install_keeps_user_level_install_of_another_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.write_user_level_install("other-bridge", root / "config.ghostty")
+            before = self.user_settings.read_text(encoding="utf-8")
+
+            token_mass.install(
+                root / "project" / ".claude" / "settings.local.json",
+                root / "config.ghostty",
+            )
+
+            self.assertEqual(self.user_settings.read_text(encoding="utf-8"), before)
+            self.assertTrue(
+                (self.user_settings.parent / token_mass.INSTALL_STATE).exists()
+            )
+
+    def test_uninstall_removes_user_level_install_of_this_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ghostty_path = root / "config.ghostty"
+            ghostty_path.write_text(
+                f"{token_mass.CONFIG_BEGIN}\ncustom-shader = {self.shader.as_posix()}\n"
+                f"{token_mass.CONFIG_END}\n",
+                encoding="utf-8",
+            )
+            self.write_user_level_install(self.command, ghostty_path)
+
+            with mock.patch.object(token_mass, "emit"):
+                token_mass.uninstall(root / "project" / ".claude" / "settings.local.json")
+
+            user = json.loads(self.user_settings.read_text(encoding="utf-8"))
+            self.assertEqual(user["statusLine"]["command"], "old-status")
+            self.assertNotIn("hooks", user)
+            self.assertNotIn(token_mass.CONFIG_BEGIN, ghostty_path.read_text(encoding="utf-8"))
+
+    def test_uninstall_keeps_ghostty_block_of_another_live_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            settings_path = root / "project" / ".claude" / "settings.local.json"
+            ghostty_path = root / "config.ghostty"
+            other_shader = root / "other" / ".claude-token-star" / "supernova.glsl"
+            other_shader.parent.mkdir(parents=True)
+            other_shader.write_text("// other project\n", encoding="utf-8")
+            token_mass.install(settings_path, ghostty_path)
+            # Another project installed afterwards and now owns the block.
+            other_block = (
+                f"font-size = 13\n\n{token_mass.CONFIG_BEGIN}\n"
+                f"custom-shader = {other_shader.as_posix()}\n"
+                f"custom-shader-animation = true\n{token_mass.CONFIG_END}\n"
+            )
+            ghostty_path.write_text(other_block, encoding="utf-8")
+
+            with mock.patch.object(token_mass, "emit"):
+                cleaned = token_mass.uninstall(settings_path, ghostty_path)
+
+            self.assertIsNone(cleaned)
+            self.assertEqual(ghostty_path.read_text(encoding="utf-8"), other_block)
+
+            other_shader.unlink()
+            with mock.patch.object(token_mass, "emit"):
+                cleaned = token_mass.uninstall(settings_path, ghostty_path)
+            self.assertEqual(cleaned, ghostty_path)
+            self.assertEqual(ghostty_path.read_text(encoding="utf-8"), "font-size = 13\n")
+
     def test_install_merges_settings_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

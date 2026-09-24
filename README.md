@@ -52,7 +52,10 @@ change your user or system execution policy. The source is copied into
 `.claude/settings.local.json`, overlay process, and hashed runtime directory.
 
 Windows does not require Python. Linux and macOS require Ghostty 1.3+ and
-Python 3.10+.
+Python 3.10+. There, Claude Code settings are also written to the project's
+`.claude/settings.local.json`. Ghostty has a single shader setting, so the most
+recently installed project owns it; uninstalling another project leaves it in
+place.
 
 Update by running the same command again. Remove it with:
 
@@ -60,8 +63,10 @@ Update by running the same command again. Remove it with:
 npx --yes github:0Alduin0/Claude-Code-Token-Star uninstall
 ```
 
-The npm package is also ready for publication. After its first registry
-release, the shorter command will be `npx claude-token-star`.
+Tagged releases are also published to npm as
+[`claude-token-star`](https://www.npmjs.com/package/claude-token-star). Once a
+release is listed there, `npx claude-token-star` accepts the same commands and
+does not need Git.
 
 <details>
 <summary>Manual installation</summary>
@@ -149,6 +154,12 @@ for all six stellar stages using animation assets rendered directly by WPF.
 
 ```powershell
 .\.claude-token-star\token-test.ps1 doctor
+```
+
+On Linux or macOS:
+
+```sh
+python3 ./.claude-token-star/token-mass.py --doctor
 ```
 
 The Windows overlay appears only while the installed project is open in a
