@@ -18,7 +18,8 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
+          # No registry-url: it makes setup-node write a placeholder auth token
+          # to .npmrc, which npm then uses instead of the OIDC exchange.
       # Trusted publishing (OIDC) needs npm 11.5.1+; Node 22 bundles npm 10.
       - name: Update npm
         run: npm install --global npm@11
@@ -33,9 +34,7 @@ jobs:
       # Publish before creating the GitHub release so a failed publish never
       # leaves a release that points users at an unavailable npm version.
       # npm authenticates through this workflow's trusted publisher (OIDC), so
-      # no token secret is involved. Re-runs skip versions already on npm; the
-      # check reads the public registry directly because setup-node configures
-      # a placeholder token that can make `npm view` fail.
+      # no token secret is involved. Re-runs skip versions already on npm.
       - name: Publish to npm
         run: |
           PACKAGE=$(node -p "require('./package.json').name")
